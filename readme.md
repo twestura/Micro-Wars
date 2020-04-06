@@ -9,4 +9,12 @@ Inspired by Gallas's [MicroMania](http://aok.heavengames.com/blacksmith/showfile
 
 The scenario relies on the parsing library here: [https://github.com/KSneijders/AoE2ScenarioParser](https://github.com/KSneijders/AoE2ScenarioParser)
 
+## License
+
+### Scenario Files
+
 You may distribute this scenario and may use this scenario as a base to build additional scenarios, provided you include this readme file with no modifications.
+
+### Code
+
+GNU General Public License v3.0: Please see [the LICENSE file](./LICENSE).
