@@ -20,14 +20,16 @@ GNU General Public License v3.0: See the LICENSE file.
 # that are hard-coded to be 255x255, thanks ES).
 
 # Unit angles are given in radians (as a 32-bit float).
-# For an approximation, 0.0 is facing North, and the radian values
+# For an approximation, 0.0 is facing Northeast, and the radian values
 # increase clockwise.
 
 
 import argparse
+import math
 from typing import List
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
 from AoE2ScenarioParser.pieces.structs.unit import UnitStruct
+import util
 
 
 # Relative path to the template scenario file.
@@ -53,10 +55,25 @@ def get_units_array(scenario: AoE2Scenario, player: int) -> List[UnitStruct]:
     if player < 1 or player > 8:
         msg = f'Player number {player} is not between 1 and 8 (inclusive).'
         raise ValueError(msg)
-    print(f"parsed data UnitsPiece type: {type(scenario.parsed_data['UnitsPiece'])}")
+    # print(f"parsed data UnitsPiece type: {type(scenario.parsed_data['UnitsPiece'])}")
     player_units = scenario.parsed_data['UnitsPiece'].retrievers[4].data[player]
-    print(type(player_units))
+    # print(type(player_units))
     return player_units.retrievers[1].data
+
+
+def units_in_area(units: List[UnitStruct],
+                  x1: float, y1: float,
+                  x2: float, y2: float) -> List[UnitStruct]:
+    """Returns all units in the square with corners (x1, y1) and (x2, y2)."""
+    return [unit for unit in units
+            if x1 <= unit_get_x(unit) <= x2 and y1 <= unit_get_y(unit) <= y2]
+
+
+# def unit_max_id(scenario: AoE2Scenario) -> int:
+    """Returns the maximum id of all units in units, or 0 if units is empty."""
+    # scenario.
+    # TODO hmm... maybe take the max over all players? Need number of players
+    # return max((unit_get_id(unit) for unit in units), default=0)
 
 
 def unit_get_x(unit: UnitStruct) -> float:
@@ -67,6 +84,18 @@ def unit_get_x(unit: UnitStruct) -> float:
 def unit_get_y(unit: UnitStruct) -> float:
     """Returns the unit's y coordinate."""
     return unit.retrievers[1].data
+
+
+def unit_set_x(unit: UnitStruct, x: float):
+    """Sets the unit's x coordinate to x."""
+    # TODO handle out of bounds errors
+    unit.retrievers[0].data = x
+
+
+def unit_set_y(unit: UnitStruct, y: float):
+    """Sets the unit's y coordinate to y."""
+    # TODO handle out of bounds errors
+    unit.retrievers[1].data = y
 
 
 def unit_get_tile(unit: UnitStruct) -> (int, int):
@@ -85,6 +114,27 @@ def unit_get_id(unit: UnitStruct) -> int:
 def unit_get_facing(unit: UnitStruct) -> float:
     """Returns the angle (in radians) giving the unit's facing direction."""
     return unit.retrievers[6].data
+
+
+def unit_set_facing(unit: UnitStruct, theta: float) -> None:
+    """
+    Sets unit to face the direction given by the angle theta.
+
+    Raises:
+        ValueError if theta does not satisfy 0 <= theta < math.tau.
+    """
+    if theta < 0.0 or theta >= math.tau:
+        raise ValueError(f'theta {theta} is not in [0, tau).')
+    unit.retrievers[6].data = theta
+
+
+def unit_facing_flip_h(unit: UnitStruct) -> None:
+    """Mirrors the unit's facing across a horizontal axis (math.pi / 4.0)."""
+    # Mods by tau because the scenario editor seems to place units facing
+    # at radian angles not strictly less than tau.
+    theta = unit_get_facing(unit) % math.tau
+    phi = util.flip_angle_h(theta)
+    unit_set_facing(unit, phi)
 
 
 def unit_get_name(unit: UnitStruct) -> str:
@@ -122,7 +172,7 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
 
     units_scenario = AoE2Scenario(unit_template)
     # units_obj_manager = units_scenario.object_manager
-    # p1_template_units = get_units_array(units_scenario, 1)
+    p1_template_units = get_units_array(units_scenario, 1)
     # print(f'p1 num_units: {len(p1_template_units)}')
     # for unit in p1_template_units:
     #     unit_id = unit_get_id(unit)
@@ -132,7 +182,9 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
     #     print(f'id: {unit_id}, x: {x}, y: {y}, theta: {theta}')
     #     unit_get_name(unit)
 
-    print(map_dimensions(units_scenario))
+
+    # print(f'max_id: {unit_max_id(p1_template_units)}')
+    # print(map_dimensions(units_scenario))
 
     # scenario.write_to_file(output)
 
@@ -166,10 +218,38 @@ def build_publish_files(args):
     raise AssertionError('Not implemented.')
 
 
+def scratch(args): # pylint: disable=unused-argument
+    """
+    Runs a simple test experiment.
+    """
+    output_path = 'scratch.aoe2scenario'
+    units_scenario_in = AoE2Scenario(UNIT_TEMPLATE)
+    units_scenario_out = AoE2Scenario(UNIT_TEMPLATE)
+
+    p1_template_units_in = get_units_array(units_scenario_in, 1)
+    p1_template_units_out = get_units_array(units_scenario_out, 1)
+    for unit in units_in_area(p1_template_units_out, 20.0, 0.0, 40.0, 20.0):
+        pass
+    # for unit, copy in zip(p1_template_units_in, p1_template_units_out):
+        # unit_facing_flip_h(unit)
+        # unit_set_x(unit, 239.5)
+        # unit_set_y(unit, 0.5)
+        # unit_set_facing(unit, 0.0)
+        # unit_set_x(copy, 239.5)
+        # unit_set_y(copy, 0.5)
+        # unit_id = unit_get_id(unit)
+        # x = unit_get_x(unit)
+        # y = unit_get_y(unit)
+        # theta = unit_get_facing(unit)
+        # print(f'id: {unit_id}, x: {x}, y: {y}, theta: {theta}')
+    units_scenario_out.write_to_file(output_path)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Builds Micro Wars!')
     subparsers = parser.add_subparsers()
-    parser_build = subparsers.add_parser('build', help='Builds the scenario')
+
+    parser_build = subparsers.add_parser('build', help='Builds the scenario.')
     parser_build.add_argument('--map', nargs=1, default=[SCENARIO_TEMPLATE],
                               help='Filepath to the map template input file.')
     parser_build.add_argument('--units', nargs=1, default=[UNIT_TEMPLATE],
@@ -181,6 +261,10 @@ def main():
     parser_publish = subparsers.add_parser('publish',
                                            help='Creates mod upload files.')
     parser_publish.set_defaults(func=build_publish_files)
+
+
+    parser_scratch = subparsers.add_parser('scratch', help='Runs a test.')
+    parser_scratch.set_defaults(func=scratch)
 
     args = parser.parse_args()
     args.func(args)
