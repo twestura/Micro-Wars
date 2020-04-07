@@ -9,6 +9,14 @@ Inspired by Gallas's [MicroMania](http://aok.heavengames.com/blacksmith/showfile
 
 The scenario relies on the parsing library here: [https://github.com/KSneijders/AoE2ScenarioParser](https://github.com/KSneijders/AoE2ScenarioParser)
 
+```text
+pip install AoE2ScenarioParser
+```
+
+```text
+pip install bidict
+```
+
 ## License
 
 ### Scenario Files

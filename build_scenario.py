@@ -27,8 +27,11 @@ GNU General Public License v3.0: See the LICENSE file.
 import argparse
 import math
 from typing import List
+from bidict import bidict
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
 from AoE2ScenarioParser.pieces.structs.unit import UnitStruct
+from AoE2ScenarioParser.datasets import units, techs
+import util_triggers
 import util
 
 
@@ -44,6 +47,32 @@ UNIT_TEMPLATE = 'unit-template.aoe2scenario'
 OUTPUT = 'Micro Wars.aoe2scenario'
 
 
+# Bidirectional map between unit names and ids.
+UNIT_IDS = bidict()
+for x in units.__dict__:
+    if '__' not in x and 'get_unit_id_by_string' not in x:
+        UNIT_IDS[x] = units.get_unit_id_by_string(x)
+
+
+# Bidirectional map between technology names and ids.
+TECH_IDS = bidict()
+for x in techs.__dict__:
+    if '__' not in x and 'get_tech_id_by_string' not in x:
+        TECH_IDS[x] = techs.get_tech_id_by_string(x)
+
+
+
+# Initial variables for keeping track of player scores and round progress.
+INITIAL_VARIABLES = {
+    'p1-score': 0,
+    'p2-score': 0,
+    'score-difference': 0,
+    'p1-wins': 0,
+    'p2-wins': 0,
+    'round': 0,
+}
+
+
 # Various utility functions to make dealing with units more ergonomic.
 def get_units_array(scenario: AoE2Scenario, player: int) -> List[UnitStruct]:
     """
@@ -51,13 +80,10 @@ def get_units_array(scenario: AoE2Scenario, player: int) -> List[UnitStruct]:
 
     Raises a ValueError if player is not in 1, ..., 8.
     """
-    # TODO figure out how the player number actually is used.
     if player < 1 or player > 8:
         msg = f'Player number {player} is not between 1 and 8 (inclusive).'
         raise ValueError(msg)
-    # print(f"parsed data UnitsPiece type: {type(scenario.parsed_data['UnitsPiece'])}")
     player_units = scenario.parsed_data['UnitsPiece'].retrievers[4].data[player]
-    # print(type(player_units))
     return player_units.retrievers[1].data
 
 
@@ -73,7 +99,42 @@ def units_in_area(units: List[UnitStruct],
     """Returns the maximum id of all units in units, or 0 if units is empty."""
     # scenario.
     # TODO hmm... maybe take the max over all players? Need number of players
+    # The Scenario stores the "next" id
     # return max((unit_get_id(unit) for unit in units), default=0)
+
+
+def scenario_num_players(scenario: AoE2Scenario) -> int:
+    """Returns the number of players in the scenario."""
+    # TODO nope, this isn't the number of players, return 9
+    return scenario.parsed_data['UnitsPiece'].retrievers[2].data
+
+
+def unit_change_player(scenario: AoE2Scenario,
+                       unit_index: int, i: int, j: int) -> None:
+    """
+    Moves a unit from control of player i to player j.
+    unit_index is the original index of the unit to move in the units array
+    of player i.
+
+    Raises a ValueError if i == j, if i and j are not valid players
+    in the scenario, or if unit_index is not a valid unit index.
+    """
+    # There is a PlayerUnits struct that has the unit count and the
+    # array of units.
+    # TODO raise ValueError
+    if i == j:
+        raise ValueError(f'Player numbers must be different, both are {i}.')
+    pi_units = scenario.parsed_data['UnitsPiece'].retrievers[4].data[i]
+    pj_units = scenario.parsed_data['UnitsPiece'].retrievers[4].data[j]
+
+    # Changes the array lengths.
+    pi_units.retrievers[0].data -= 1
+    pj_units.retrievers[0].data += 1
+
+    # Transfers the unit.
+    unit = pi_units.retrievers[1].data[unit_index]
+    del pi_units.retrievers[1].data[unit_index]
+    pj_units.retrievers[1].data.append(unit)
 
 
 def unit_get_x(unit: UnitStruct) -> float:
@@ -153,6 +214,20 @@ def map_dimensions(scenario: AoE2Scenario) -> (int, int):
     return width, height
 
 
+# TODO how mutually to activate/deactivate triggers?
+# Should I keep a map from trigger name to trigger id?
+
+def add_initial_triggers(triggers: util_triggers.TriggerUtil) -> None:
+    # TODO specify
+    triggers.add_header('Init')
+    # TODO variable names
+    triggers.initialize_variables(INITIAL_VARIABLES)
+    triggers.add_header('Objectives')
+    # TODO continue implementing
+
+
+
+
 def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
                    unit_template: str = UNIT_TEMPLATE, output: str = OUTPUT):
     """
@@ -165,28 +240,23 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
         unit_template: A template of unit formations to copy for fights.
         output: The output path to which the resulting scenario is written.
     """
-    # scenario = AoE2Scenario(scenario_template)
-    # object_manager = scenario.object_manager
-    # trigger_manager = object_manager.get_trigger_object()
-    # print(trigger_manager.get_summary_as_string())
+    scn = AoE2Scenario(scenario_template)
+    triggers = util_triggers.TriggerUtil(scn)
 
-    units_scenario = AoE2Scenario(unit_template)
-    # units_obj_manager = units_scenario.object_manager
-    p1_template_units = get_units_array(units_scenario, 1)
-    # print(f'p1 num_units: {len(p1_template_units)}')
-    # for unit in p1_template_units:
-    #     unit_id = unit_get_id(unit)
-    #     x = unit_get_x(unit)
-    #     y = unit_get_y(unit)
-    #     theta = unit_get_facing(unit)
-    #     print(f'id: {unit_id}, x: {x}, y: {y}, theta: {theta}')
-    #     unit_get_name(unit)
+    # units_scn = AoE2Scenario(unit_template)
 
+    # parse fight data
+    # add in minigames
+    events = []
 
-    # print(f'max_id: {unit_max_id(p1_template_units)}')
-    # print(map_dimensions(units_scenario))
+    add_initial_triggers(triggers)
 
-    # scenario.write_to_file(output)
+    for event in events:
+        event.add_triggers(triggers)
+
+    # add victory condition triggers
+
+    scn.write_to_file(output)
 
 
 def call_build_scenario(args):
@@ -222,14 +292,19 @@ def scratch(args): # pylint: disable=unused-argument
     """
     Runs a simple test experiment.
     """
-    output_path = 'scratch.aoe2scenario'
-    units_scenario_in = AoE2Scenario(UNIT_TEMPLATE)
-    units_scenario_out = AoE2Scenario(UNIT_TEMPLATE)
+    scratch_path = 'scratch.aoe2scenario'
+    # scn = AoE2Scenario(scratch_path)
+    # trigger_mgr = scn.object_manager.get_trigger_object()
+    # print(trigger_mgr.get_trigger_as_string(trigger_id=0))
+    # output_path = 'scratch.aoe2scenario'
+    # units_scenario_in = AoE2Scenario(UNIT_TEMPLATE)
+    # units_scenario_out = AoE2Scenario(UNIT_TEMPLATE)
+    # triggers_out = util_triggers.TriggerUtil(units_scenario_out)
 
-    p1_template_units_in = get_units_array(units_scenario_in, 1)
-    p1_template_units_out = get_units_array(units_scenario_out, 1)
-    for unit in units_in_area(p1_template_units_out, 20.0, 0.0, 40.0, 20.0):
-        pass
+    # p1_template_units_in = get_units_array(units_scenario_in, 1)
+    # p1_template_units_out = get_units_array(units_scenario_out, 1)
+    # for unit in units_in_area(p1_template_units_out, 20.0, 0.0, 40.0, 20.0):
+    #     pass
     # for unit, copy in zip(p1_template_units_in, p1_template_units_out):
         # unit_facing_flip_h(unit)
         # unit_set_x(unit, 239.5)
@@ -242,7 +317,9 @@ def scratch(args): # pylint: disable=unused-argument
         # y = unit_get_y(unit)
         # theta = unit_get_facing(unit)
         # print(f'id: {unit_id}, x: {x}, y: {y}, theta: {theta}')
-    units_scenario_out.write_to_file(output_path)
+    # unit_change_player(units_scenario_out, 0, 1, 2)
+    # triggers_out.add_header('Hello, World!')
+    # units_scenario_out.write_to_file(output_path)
 
 
 def main():
