@@ -30,7 +30,8 @@ from typing import List
 from bidict import bidict
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
 from AoE2ScenarioParser.pieces.structs.unit import UnitStruct
-from AoE2ScenarioParser.datasets import units, techs
+from AoE2ScenarioParser.pieces.structs.variable_change import VariableChangeStruct # pylint: disable=line-too-long
+from AoE2ScenarioParser.datasets import conditions, effects, techs, units
 import util_triggers
 import util
 
@@ -61,16 +62,24 @@ for x in techs.__dict__:
         TECH_IDS[x] = techs.get_tech_id_by_string(x)
 
 
+# The number of scenario editor variables.
+NUM_VARIABLES = 256
 
-# Initial variables for keeping track of player scores and round progress.
-INITIAL_VARIABLES = {
-    'p1-score': 0,
-    'p2-score': 0,
-    'score-difference': 0,
-    'p1-wins': 0,
-    'p2-wins': 0,
-    'round': 0,
-}
+
+# Initial variables for keeping track of player scores and round progress,
+# stored as (variable-name, initial-value) pairs.
+INITIAL_VARIABLES = [
+    ('p1-score', 0),
+    ('p2-score', 0),
+    ('score-difference', 0),
+    ('p1-wins', 0),
+    ('p2-wins', 0),
+    ('round', 0),
+]
+
+
+# The number of seconds to wait between rounds.
+BETWEEN_ROUND_DELAY = 5
 
 
 # Various utility functions to make dealing with units more ergonomic.
@@ -87,11 +96,11 @@ def get_units_array(scenario: AoE2Scenario, player: int) -> List[UnitStruct]:
     return player_units.retrievers[1].data
 
 
-def units_in_area(units: List[UnitStruct],
+def units_in_area(unit_array: List[UnitStruct],
                   x1: float, y1: float,
                   x2: float, y2: float) -> List[UnitStruct]:
     """Returns all units in the square with corners (x1, y1) and (x2, y2)."""
-    return [unit for unit in units
+    return [unit for unit in unit_array
             if x1 <= unit_get_x(unit) <= x2 and y1 <= unit_get_y(unit) <= y2]
 
 
@@ -214,18 +223,99 @@ def map_dimensions(scenario: AoE2Scenario) -> (int, int):
     return width, height
 
 
+def name_variables(scn: AoE2Scenario) -> None:
+    """Sets the names for trigger variables in the scenario scn."""
+    trigger_piece = scn.parsed_data['TriggerPiece']
+    var_count = trigger_piece.retrievers[6]
+    var_change = trigger_piece.retrievers[7].data
+    for name, __ in INITIAL_VARIABLES:
+        var = VariableChangeStruct()
+        var.retrievers[0].data = var_count.data
+        var.retrievers[1].data = name
+        var_change.append(var)
+        var_count.data += 1
+
+
+def add_trigger_header(scn: AoE2Scenario, trigger_ids, name: str) -> None:
+    """
+    Appends a trigger section header with title `name`.
+
+    trigger_ids is a bidict mapping trigger names to their trigger indices.
+
+    A header trigger serves no functional purpose, but allows
+    the trigger list to be broken up into sections so that
+    it is more human-readable in the editor.
+
+    Raises a ValueError if creating this trigger would create a
+    trigger with a duplicate name.
+    """
+    trigger_name = f'-- {name} --'
+    if trigger_name in trigger_ids:
+        raise ValueError(f'A trigger named {trigger_name} already exists.')
+
+    obj_mgr = scn.object_manager
+    trigger_mgr = obj_mgr.get_trigger_object()
+    trigger_mgr.add_trigger(trigger_name)
+    trigger_ids[trigger_name] = len(trigger_ids)
+
+
+def initialize_variable_values(scn: AoE2Scenario, trigger_ids) -> None:
+    """
+    Initializes the variables used in the scenario to have their
+    starting values.
+    """
+    obj_mgr = scn.object_manager
+    trigger_mgr = obj_mgr.get_trigger_object()
+    trigger_name = '[I] Initialize Variables'
+    assert trigger_name not in trigger_ids
+    trigger_ids[trigger_name] = len(trigger_ids)
+    init_vars = trigger_mgr.add_trigger(trigger_name)
+    init_vars.description = 'Initializes variables to their starting values.'
+
+    for index, (name, value) in enumerate(INITIAL_VARIABLES):
+        change_var = init_vars.add_effect(effects.change_variable)
+        change_var.quantity = value
+        change_var.operation = 1 # TODO make an enum for these ops, 1 = SET
+        change_var.from_variable = index
+        change_var.message = name # Not strictly necessary, since names are set.
+
+
+def add_start_timer(scn: AoE2Scenario, trigger_ids) -> None:
+    """
+    Adds a short timer before starting the first round by setting the round
+    counter to 1.
+    """
+    obj_mgr = scn.object_manager
+    trigger_mgr = obj_mgr.get_trigger_object()
+    trigger_name = '[I] Initialize Start Timer'
+    assert trigger_name not in trigger_ids
+    trigger_ids[trigger_name] = len(trigger_ids)
+    init_timer = trigger_mgr.add_trigger(trigger_name)
+    init_timer.description = 'Initializes a start timer to start round 1.'
+
+    timer = init_timer.add_condition(conditions.timer)
+    timer.timer = BETWEEN_ROUND_DELAY
+    inc_round_count = init_timer.add_effect(effects.change_variable)
+    inc_round_count.quantity = 1
+    inc_round_count.operation = 2 # TODO enum
+    inc_round_count.from_variable = 5 # TODO magic number alert
+    inc_round_count.message = 'round' # TODO magic
+
+
 # TODO how mutually to activate/deactivate triggers?
 # Should I keep a map from trigger name to trigger id?
 
-def add_initial_triggers(triggers: util_triggers.TriggerUtil) -> None:
-    # TODO specify
-    triggers.add_header('Init')
-    # TODO variable names
-    triggers.initialize_variables(INITIAL_VARIABLES)
-    triggers.add_header('Objectives')
-    # TODO continue implementing
-
-
+def add_initial_triggers(scn: AoE2Scenario, trigger_ids) -> None:
+    """
+    Adds initial triggers for initializing variables, listing player objectives,
+    and starting the first round.
+    """
+    add_trigger_header(scn, trigger_ids, 'Init')
+    initialize_variable_values(scn, trigger_ids)
+    add_start_timer(scn, trigger_ids)
+    # TODO player start views
+    add_trigger_header(scn, trigger_ids, 'Objectives')
+    # TODO objectives
 
 
 def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
@@ -241,7 +331,7 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
         output: The output path to which the resulting scenario is written.
     """
     scn = AoE2Scenario(scenario_template)
-    triggers = util_triggers.TriggerUtil(scn)
+    # triggers = util_triggers.TriggerUtil(scn)
 
     # units_scn = AoE2Scenario(unit_template)
 
@@ -249,14 +339,22 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
     # add in minigames
     events = []
 
-    add_initial_triggers(triggers)
+    # Maps a trigger name to its trigger index number.
+    trigger_ids = bidict()
 
-    for event in events:
-        event.add_triggers(triggers)
+    name_variables(scn)
+    add_initial_triggers(scn, trigger_ids)
+
+    # for event in events:
+    #     event.add_triggers(triggers)
 
     # add victory condition triggers
 
     scn.write_to_file(output)
+
+    print('Triggers:')
+    for name, index in trigger_ids.items():
+        print(f'{index}: {name}')
 
 
 def call_build_scenario(args):
@@ -293,6 +391,9 @@ def scratch(args): # pylint: disable=unused-argument
     Runs a simple test experiment.
     """
     scratch_path = 'scratch.aoe2scenario'
+    for name in sorted(TECH_IDS):
+        print(name)
+    # TODO test naming variables
     # scn = AoE2Scenario(scratch_path)
     # trigger_mgr = scn.object_manager.get_trigger_object()
     # print(trigger_mgr.get_trigger_as_string(trigger_id=0))
