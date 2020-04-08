@@ -108,16 +108,215 @@ class VarValComp(Enum):
     larger_or_equal = 4
 
 
-def add_trigger(scn: AoE2Scenario, trigger_ids, name: str):
-    """
-    Adds a trigger named name to the scenario and trigger_ids bidict.
-    Raises a ValueError if a trigger with that name already exists.
-    Returns the created trigger object.
-    """
-    if name in trigger_ids:
-        raise ValueError(f'{name} is already the name of a trigger.')
-    trigger_ids[name] = len(trigger_ids)
-    return scn.object_manager.get_trigger_object().add_trigger(name)
+class ScnData:
+    """An instance represents data to mutate while processing a scenario."""
+
+    # TODO how mutually to activate/deactivate triggers?
+    # Should I keep a map from trigger name to trigger id?
+
+    @staticmethod
+    def from_file(file_path):
+        """Returns a new ScnData object parsed from the file `file_path`."""
+        scn = AoE2Scenario(file_path)
+        return ScnData(scn)
+
+    def __init__(self, scn: AoE2Scenario):
+        """Initializes a new ScnData object for the scenario scn."""
+        self._scn = scn
+
+        # Bidirectional map from a trigger's name to its index.
+        self._trigger_ids = bidict()
+
+    def write_to_file(self, file_path):
+        """
+        Writes the current scn file to `file_path`.
+
+        Overwrites any file currently at that path.
+        """
+        self._scn.write_to_file(file_path)
+
+    def _add_trigger(self, name: str):
+        """
+        Adds a trigger named name to the scenario and trigger_ids bidict.
+        Raises a ValueError if a trigger with that name already exists.
+        Returns the created trigger object.
+        """
+        if name in self._trigger_ids:
+            raise ValueError(f'{name} is already the name of a trigger.')
+        self._trigger_ids[name] = len(self._trigger_ids)
+        return self._scn.object_manager.get_trigger_object().add_trigger(name)
+
+    def name_variables(self) -> None:
+        """Sets the names for trigger variables in the scenario."""
+        trigger_piece = self._scn.parsed_data['TriggerPiece']
+        var_count = trigger_piece.retrievers[6]
+        var_change = trigger_piece.retrievers[7].data
+        for name, __ in INITIAL_VARIABLES:
+            var = VariableChangeStruct()
+            var.retrievers[0].data = var_count.data
+            var.retrievers[1].data = name
+            var_change.append(var)
+            var_count.data += 1
+
+    def add_initial_triggers(self) -> None:
+        """
+        Adds initial triggers for initializing variables,
+        listing player objectives, and starting the first round.
+        """
+        self._add_trigger_header('Init')
+        self._initialize_variable_values()
+        self._add_start_timer()
+        self._set_start_views()
+        self._add_objectives()
+
+    def _add_trigger_header(self, name: str) -> None:
+        """
+        Appends a trigger section header with title `name`.
+
+        A header trigger serves no functional purpose, but allows
+        the trigger list to be broken up into sections so that
+        it is more human-readable in the editor.
+
+        Raises a ValueError if creating this trigger would create a
+        trigger with a duplicate name.
+        """
+        trigger_name = f'-- {name} --'
+        self._add_trigger(trigger_name)
+
+    def _initialize_variable_values(self) -> None:
+        """
+        Initializes the variables used in the scenario to have their
+        starting values.
+        """
+        trigger_name = '[I] Initialize Variables'
+        init_vars = self._add_trigger(trigger_name)
+        init_vars.description = 'Initializes variable starting values.'
+
+        for index, (name, value) in enumerate(INITIAL_VARIABLES):
+            change_var = init_vars.add_effect(effects.change_variable)
+            change_var.quantity = value
+            change_var.operation = ChangeVarOp.set_op.value
+            change_var.from_variable = index
+            change_var.message = name
+
+    def _add_start_timer(self) -> None:
+        """
+        Adds a short timer before starting the first round by setting the round
+        counter to 1.
+        """
+        trigger_name = '[I] Initialize Start Timer'
+        init_timer = self._add_trigger(trigger_name)
+        init_timer.description = 'Initializes a start timer to start round 1.'
+
+        timer = init_timer.add_condition(conditions.timer)
+        timer.timer = BETWEEN_ROUND_DELAY
+        inc_round_count = init_timer.add_effect(effects.change_variable)
+        inc_round_count.quantity = 1
+        inc_round_count.operation = ChangeVarOp.add.value
+        inc_round_count.from_variable = 5 # TODO magic number alert
+        inc_round_count.message = 'round' # TODO magic
+
+
+    def _set_start_views(self) -> None:
+        """
+        Uses Change View Effects to set the player start views.
+        This trigger is a workaround, since setting the start views
+        through the Options menu does not work for
+        multiplayer scenarios.
+        """
+        trigger_name = '[I] Initialize Starting Player Views'
+        init_views = self._add_trigger(trigger_name)
+        init_views.description = 'Changes p1 and p2 view to the middle.'
+
+        for player in (1, 2):
+            change_view = init_views.add_effect(effects.change_view)
+            change_view.player_source = player
+            change_view.location_x = START_VIEW_X
+            change_view.location_y = START_VIEW_Y
+            change_view.scroll = False
+
+
+    def _add_objectives(self) -> None:
+        """
+        Sets up the player objectives to display the score both
+        on the side of the screen and in the objectives menu.
+        """
+        self._add_trigger_header('Objectives')
+
+        # Menu objectives
+        obj_title_name = '[O] Objectives Title'
+        obj_title = self._add_trigger(obj_title_name)
+        obj_title.display_as_objective = True
+        obj_title.description_order = 200
+        obj_title.header = True
+        obj_title.description = 'Micro Wars!'
+        add_cond_gaia_defeated(obj_title)
+
+        obj_description_name = '[O] Objectives Description'
+        obj_description = self._add_trigger(obj_description_name)
+        obj_description.display_as_objective = True
+        obj_description.description_order = 199
+        obj_description.description = "Each round is worth 100 points. Win points by killing your opponent's units or by completing special objectives." # pylint: disable=line-too-long
+        add_cond_gaia_defeated(obj_description)
+
+        obj_score_header_name = '[O] Objectives Score Header'
+        obj_score_header = self._add_trigger(obj_score_header_name)
+        obj_score_header.display_as_objective = True
+        obj_score_header.description_order = 100
+        obj_score_header.description = 'Score:'
+        obj_score_header.header = True
+        add_cond_gaia_defeated(obj_score_header)
+
+        obj_score_p1_name = '[O] Objectives Score P1'
+        obj_score_p1 = self._add_trigger(obj_score_p1_name)
+        obj_score_p1.display_as_objective = True
+        obj_score_p1.description_order = 99
+        obj_score_p1.description = 'Player 1: <p1-score>'
+        obj_p1_wins_cond = obj_score_p1.add_condition(conditions.variable_value)
+        obj_p1_wins_cond.amount_or_quantity = 1
+        obj_p1_wins_cond.variable = 3 # TODO magic number
+        obj_p1_wins_cond.comparison = VarValComp.equal.value
+
+        obj_score_p2_name = '[O] Objectives Score P2'
+        obj_score_p2 = self._add_trigger(obj_score_p2_name)
+        obj_score_p2.display_as_objective = True
+        obj_score_p2.description_order = 98
+        obj_score_p2.description = 'Player 2: <p2-score>'
+        obj_p2_wins_cond = obj_score_p2.add_condition(conditions.variable_value)
+        obj_p2_wins_cond.amount_or_quantity = 1
+        obj_p2_wins_cond.variable = 4 # TODO magic number
+        obj_p2_wins_cond.comparison = VarValComp.equal.value
+
+        # Displayed Objectives
+        disp_score_header_name = '[O] Display Score Header'
+        disp_score_header = self._add_trigger(disp_score_header_name)
+        disp_score_header.display_on_screen = True
+        disp_score_header.description_order = 100
+        disp_score_header.short_description = 'Score:'
+        disp_score_header.header = True
+        add_cond_gaia_defeated(disp_score_header)
+
+        disp_score_p1_name = '[O] Display Score P1'
+        disp_score_p1 = self._add_trigger(disp_score_p1_name)
+        disp_score_p1.display_on_screen = True
+        disp_score_p1.description_order = 99
+        disp_score_p1.short_description = 'P1: <p1-score>'
+        disp_p1_wins_cond = disp_score_p1.add_condition(
+            conditions.variable_value)
+        disp_p1_wins_cond.amount_or_quantity = 1
+        disp_p1_wins_cond.variable = 3 # TODO magic number
+        disp_p1_wins_cond.comparison = VarValComp.equal.value
+
+        disp_score_p2_name = '[O] Display Score P2'
+        disp_score_p2 = self._add_trigger(disp_score_p2_name)
+        disp_score_p2.display_on_screen = True
+        disp_score_p2.description_order = 98
+        disp_score_p2.short_description = 'P2: <p2-score>'
+        disp_p2_wins_cond = disp_score_p2.add_condition(
+            conditions.variable_value)
+        disp_p2_wins_cond.amount_or_quantity = 1
+        disp_p2_wins_cond.variable = 4 # TODO magic number
+        disp_p2_wins_cond.comparison = VarValComp.equal.value
 
 
 def add_cond_gaia_defeated(trigger) -> None:
@@ -258,186 +457,6 @@ def map_dimensions(scenario: AoE2Scenario) -> (int, int):
     return width, height
 
 
-def name_variables(scn: AoE2Scenario) -> None:
-    """Sets the names for trigger variables in the scenario scn."""
-    trigger_piece = scn.parsed_data['TriggerPiece']
-    var_count = trigger_piece.retrievers[6]
-    var_change = trigger_piece.retrievers[7].data
-    for name, __ in INITIAL_VARIABLES:
-        var = VariableChangeStruct()
-        var.retrievers[0].data = var_count.data
-        var.retrievers[1].data = name
-        var_change.append(var)
-        var_count.data += 1
-
-
-def add_trigger_header(scn: AoE2Scenario, trigger_ids, name: str) -> None:
-    """
-    Appends a trigger section header with title `name`.
-
-    trigger_ids is a bidict mapping trigger names to their trigger indices.
-
-    A header trigger serves no functional purpose, but allows
-    the trigger list to be broken up into sections so that
-    it is more human-readable in the editor.
-
-    Raises a ValueError if creating this trigger would create a
-    trigger with a duplicate name.
-    """
-    trigger_name = f'-- {name} --'
-    add_trigger(scn, trigger_ids, trigger_name)
-
-
-def initialize_variable_values(scn: AoE2Scenario, trigger_ids) -> None:
-    """
-    Initializes the variables used in the scenario to have their
-    starting values.
-    """
-    trigger_name = '[I] Initialize Variables'
-    init_vars = add_trigger(scn, trigger_ids, trigger_name)
-    init_vars.description = 'Initializes variables to their starting values.'
-
-    for index, (name, value) in enumerate(INITIAL_VARIABLES):
-        change_var = init_vars.add_effect(effects.change_variable)
-        change_var.quantity = value
-        change_var.operation = ChangeVarOp.set_op.value
-        change_var.from_variable = index
-        change_var.message = name # Not strictly necessary, since names are set.
-
-
-def add_start_timer(scn: AoE2Scenario, trigger_ids) -> None:
-    """
-    Adds a short timer before starting the first round by setting the round
-    counter to 1.
-    """
-    trigger_name = '[I] Initialize Start Timer'
-    init_timer = add_trigger(scn, trigger_ids, trigger_name)
-    init_timer.description = 'Initializes a start timer to start round 1.'
-
-    timer = init_timer.add_condition(conditions.timer)
-    timer.timer = BETWEEN_ROUND_DELAY
-    inc_round_count = init_timer.add_effect(effects.change_variable)
-    inc_round_count.quantity = 1
-    inc_round_count.operation = ChangeVarOp.add.value
-    inc_round_count.from_variable = 5 # TODO magic number alert
-    inc_round_count.message = 'round' # TODO magic
-
-
-def set_start_views(scn: AoE2Scenario, trigger_ids) -> None:
-    """
-    Uses Change View Effects to set the player start views.
-    This trigger is a workaround, since setting the start views
-    through the Options menu does not work for
-    multiplayer scenarios.
-    """
-    trigger_name = '[I] Initialize Starting Player Views'
-    init_views = add_trigger(scn, trigger_ids, trigger_name)
-    init_views.description = 'Changes p1 and p2 view to the middle.'
-
-    for player in (1, 2):
-        change_view = init_views.add_effect(effects.change_view)
-        change_view.player_source = player
-        change_view.location_x = START_VIEW_X
-        change_view.location_y = START_VIEW_Y
-        change_view.scroll = False
-
-
-def add_objectives(scn: AoE2Scenario, trigger_ids) -> None:
-    """
-    Sets up the player objectives to display the score both
-    on the side of the screen and in the objectives menu.
-    """
-    add_trigger_header(scn, trigger_ids, 'Objectives')
-
-    # Menu objectives
-    obj_title_name = '[O] Objectives Title'
-    obj_title = add_trigger(scn, trigger_ids, obj_title_name)
-    obj_title.display_as_objective = True
-    obj_title.description_order = 200
-    obj_title.header = True
-    obj_title.description = 'Micro Wars!'
-    add_cond_gaia_defeated(obj_title)
-
-    obj_description_name = '[O] Objectives Description'
-    obj_description = add_trigger(scn, trigger_ids, obj_description_name)
-    obj_description.display_as_objective = True
-    obj_description.description_order = 199
-    obj_description.description = "Each round is worth 100 points. Win points by killing your opponent's units or by completing special objectives." # pylint: disable=line-too-long
-    add_cond_gaia_defeated(obj_description)
-
-    obj_score_header_name = '[O] Objectives Score Header'
-    obj_score_header = add_trigger(scn, trigger_ids, obj_score_header_name)
-    obj_score_header.display_as_objective = True
-    obj_score_header.description_order = 100
-    obj_score_header.description = 'Score:'
-    obj_score_header.header = True
-    add_cond_gaia_defeated(obj_score_header)
-
-    obj_score_p1_name = '[O] Objectives Score P1'
-    obj_score_p1 = add_trigger(scn, trigger_ids, obj_score_p1_name)
-    obj_score_p1.display_as_objective = True
-    obj_score_p1.description_order = 99
-    obj_score_p1.description = 'Player 1: <p1-score>'
-    obj_p1_wins_cond = obj_score_p1.add_condition(conditions.variable_value)
-    obj_p1_wins_cond.amount_or_quantity = 1
-    obj_p1_wins_cond.variable = 3 # TODO magic number
-    obj_p1_wins_cond.comparison = VarValComp.equal.value
-
-    obj_score_p2_name = '[O] Objectives Score P2'
-    obj_score_p2 = add_trigger(scn, trigger_ids, obj_score_p2_name)
-    obj_score_p2.display_as_objective = True
-    obj_score_p2.description_order = 98
-    obj_score_p2.description = 'Player 2: <p2-score>'
-    obj_p2_wins_cond = obj_score_p2.add_condition(conditions.variable_value)
-    obj_p2_wins_cond.amount_or_quantity = 1
-    obj_p2_wins_cond.variable = 4 # TODO magic number
-    obj_p2_wins_cond.comparison = VarValComp.equal.value
-
-    # Displayed Objectives
-    disp_score_header_name = '[O] Display Score Header'
-    disp_score_header = add_trigger(scn, trigger_ids, disp_score_header_name)
-    disp_score_header.display_on_screen = True
-    disp_score_header.description_order = 100
-    disp_score_header.short_description = 'Score:'
-    disp_score_header.header = True
-    add_cond_gaia_defeated(disp_score_header)
-
-    disp_score_p1_name = '[O] Display Score P1'
-    disp_score_p1 = add_trigger(scn, trigger_ids, disp_score_p1_name)
-    disp_score_p1.display_on_screen = True
-    disp_score_p1.description_order = 99
-    disp_score_p1.short_description = 'P1: <p1-score>'
-    disp_p1_wins_cond = disp_score_p1.add_condition(conditions.variable_value)
-    disp_p1_wins_cond.amount_or_quantity = 1
-    disp_p1_wins_cond.variable = 3 # TODO magic number
-    disp_p1_wins_cond.comparison = VarValComp.equal.value
-
-    disp_score_p2_name = '[O] Display Score P2'
-    disp_score_p2 = add_trigger(scn, trigger_ids, disp_score_p2_name)
-    disp_score_p2.display_on_screen = True
-    disp_score_p2.description_order = 98
-    disp_score_p2.short_description = 'P2: <p2-score>'
-    disp_p2_wins_cond = disp_score_p2.add_condition(conditions.variable_value)
-    disp_p2_wins_cond.amount_or_quantity = 1
-    disp_p2_wins_cond.variable = 4 # TODO magic number
-    disp_p2_wins_cond.comparison = VarValComp.equal.value
-
-
-# TODO how mutually to activate/deactivate triggers?
-# Should I keep a map from trigger name to trigger id?
-
-def add_initial_triggers(scn: AoE2Scenario, trigger_ids) -> None:
-    """
-    Adds initial triggers for initializing variables, listing player objectives,
-    and starting the first round.
-    """
-    add_trigger_header(scn, trigger_ids, 'Init')
-    initialize_variable_values(scn, trigger_ids)
-    add_start_timer(scn, trigger_ids)
-    set_start_views(scn, trigger_ids)
-    add_objectives(scn, trigger_ids)
-
-
 def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
                    unit_template: str = UNIT_TEMPLATE, output: str = OUTPUT):
     """
@@ -450,8 +469,7 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
         unit_template: A template of unit formations to copy for fights.
         output: The output path to which the resulting scenario is written.
     """
-    scn = AoE2Scenario(scenario_template)
-    # triggers = util_triggers.TriggerUtil(scn)
+    scn_data = ScnData.from_file(scenario_template)
 
     # units_scn = AoE2Scenario(unit_template)
 
@@ -459,21 +477,18 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
     # add in minigames
     # events = []
 
-    # Maps a trigger name to its trigger index number.
-    trigger_ids = bidict()
-
-    name_variables(scn)
-    add_initial_triggers(scn, trigger_ids)
+    scn_data.name_variables()
+    scn_data.add_initial_triggers()
 
     # for event in events:
     #     event.add_triggers(triggers)
 
     # add victory condition triggers
 
-    scn.write_to_file(output)
+    scn_data.write_to_file(output)
 
     print('Triggers:')
-    for name, index in trigger_ids.items():
+    for name, index in scn_data._trigger_ids.items():
         print(f'{index}: {name}')
 
 
