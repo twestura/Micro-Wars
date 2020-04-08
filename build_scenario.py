@@ -25,6 +25,7 @@ GNU General Public License v3.0: See the LICENSE file.
 
 
 import argparse
+from collections import defaultdict
 from enum import Enum
 from bidict import bidict
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
@@ -68,8 +69,24 @@ INITIAL_VARIABLES = [
 ]
 
 
-# The number of seconds to wait between rounds.
-BETWEEN_ROUND_DELAY = 5
+# The number of seconds to wait between launching the scenario and
+# setting the round counter to 1
+DELAY_BEGIN = 5
+
+
+# The number of seconds to wait after ending a round.
+# After this delay finishes, another timer of DELAY_ROUND_BEFORE
+# is used after performing basic setup for the next round.
+DELAY_ROUND_AFTER = 3
+
+
+# The number of seconds to wait before starting a round.
+DELAY_ROUND_BEFORE = 3
+
+
+# The number of seconds to wait before ending the scenario when a
+# player has won.
+DELAY_VICTORY = 10
 
 
 # X coordinate of the player's starting view.
@@ -120,6 +137,49 @@ class ScnData:
         # Bidirectional map from a variable's name to its index.
         self._var_ids = bidict()
 
+        # Maps the name of a trigger t to a set of triggers that t activates.
+        self._activate_triggers = defaultdict(set)
+
+        # Maps the name of a trigger t to a set of triggers that t deactivates.
+        self._deactivate_triggers = defaultdict(set)
+
+    def _add_activate_and_deactivate_effects(self):
+        """
+        Adds all activate and deactivate triggers specified in the fields.
+        """
+        trigger_mgr = self._scn.object_manager.get_trigger_object()
+        effect_mapping_and_function = [
+            (self._activate_triggers, util_triggers.add_effect_activate),
+            (self._deactivate_triggers, util_triggers.add_effect_deactivate)
+        ]
+        for mapping, add_effect in effect_mapping_and_function:
+            for source_name, target_names in mapping.items():
+                for target_name in target_names:
+                    source_id = self._trigger_ids[source_name]
+                    source = trigger_mgr.get_trigger(trigger_id=source_id)
+                    target_id = self._trigger_ids[target_name]
+                    add_effect(source, target_id)
+
+    def _add_activate(self, name_source: str, name_target: str):
+        """
+        Appends name_target to the list of triggers activated by name_source.
+        Raises a ValueError if name_source already should activate name_target.
+        """
+        if name_target in self._activate_triggers[name_source]:
+            raise ValueError(f'{name_source} already activates {name_target}.')
+        self._activate_triggers[name_source].add(name_target)
+
+    def _add_deactivate(self, name_source: str, name_target: str):
+        """
+        Appends name_target to the list of triggers deactivated by name_source.
+        Raises a ValueError if name_source already should deactivate
+        name_target.
+        """
+        if name_target in self._deactivate_triggers[name_source]:
+            raise ValueError(
+                f'{name_source} already deactivates {name_target}.')
+        self._deactivate_triggers[name_source].add(name_target)
+
     def write_to_file(self, file_path):
         """
         Writes the current scn file to `file_path`.
@@ -135,6 +195,10 @@ class ScnData:
         """
         self._name_variables()
         self._add_initial_triggers()
+
+        # TODO implement
+
+        self._add_activate_and_deactivate_effects()
 
     def _add_trigger(self, name: str):
         """
@@ -171,6 +235,7 @@ class ScnData:
         self._add_start_timer()
         self._set_start_views()
         self._add_objectives()
+        self._add_victory_conditions()
 
     def _add_trigger_header(self, name: str) -> None:
         """
@@ -211,8 +276,7 @@ class ScnData:
         init_timer = self._add_trigger(trigger_name)
         init_timer.description = 'Initializes a start timer to start round 1.'
 
-        timer = init_timer.add_condition(conditions.timer)
-        timer.timer = BETWEEN_ROUND_DELAY
+        util_triggers.add_cond_timer(init_timer, DELAY_BEGIN)
         inc_round_count = init_timer.add_effect(effects.change_variable)
         inc_round_count.quantity = 1
         inc_round_count.operation = ChangeVarOp.add.value
@@ -322,6 +386,63 @@ class ScnData:
         disp_p2_wins_cond.comparison = VarValComp.equal.value
 
         # TODO add objectives for individual rounds
+
+    def _add_victory_conditions(self):
+        """
+        Adds triggers to display victory messages and win the game after a
+        short timer, once one of the p1-wins or p2-wins variables is set.
+        """
+        self._add_trigger_header('Victory')
+
+        is_victorious_p1 = self._add_trigger('[V] Player 1 is Victorious')
+        cond_p1_wins = is_victorious_p1.add_condition(conditions.variable_value)
+        cond_p1_wins.amount_or_quantity = 1
+        cond_p1_wins.variable = self._var_ids['p1-wins']
+        cond_p1_wins.comparison = VarValComp.equal.value
+
+        msg_p1 = is_victorious_p1.add_effect(effects.display_instructions)
+        msg_p1.player_source = 1
+        msg_p1.message = '<BLUE>Player 1 is Victorious!'
+        msg_p1.display_time = 10
+        msg_p1.play_sound = False
+        msg_p1.sound_name = '\x00'
+        msg_p1.string_id = -1
+
+        self._add_activate(is_victorious_p1.name.rstrip('\x00'),
+                           '[V] Declare Player 1 Victory')
+        self._add_deactivate(is_victorious_p1.name.rstrip('\x00'),
+                             '[V] Player 2 is Victorious')
+
+        is_victorious_p2 = self._add_trigger('[V] Player 2 is Victorious')
+
+        cond_p2_wins = is_victorious_p2.add_condition(conditions.variable_value)
+        cond_p2_wins.amount_or_quantity = 1
+        cond_p2_wins.variable = self._var_ids['p2-wins']
+        cond_p2_wins.comparison = VarValComp.equal.value
+
+        msg_p2 = is_victorious_p2.add_effect(effects.display_instructions)
+        msg_p2.player_source = 2
+        msg_p2.message = '<RED>Player 2 is Victorious!'
+        msg_p2.display_time = 10
+        msg_p2.play_sound = False
+        msg_p2.sound_name = '\x00'
+        msg_p2.string_id = -1
+
+        self._add_activate(is_victorious_p2.name.rstrip('\x00'),
+                           '[V] Declare Player 2 Victory')
+        self._add_deactivate(is_victorious_p2.name.rstrip('\x00'),
+                             '[V] Player 1 is Victorious')
+
+        declare_victory_p1 = self._add_trigger('[V] Declare Player 1 Victory')
+        declare_victory_p1.enabled = False
+        util_triggers.add_cond_timer(declare_victory_p1, DELAY_VICTORY)
+        util_triggers.add_effect_delcare_victory(declare_victory_p1, 1)
+
+        declare_victory_p2 = self._add_trigger('[V] Declare Player 2 Victory')
+        declare_victory_p2.enabled = False
+        util_triggers.add_cond_timer(declare_victory_p2, DELAY_VICTORY)
+        util_triggers.add_effect_delcare_victory(declare_victory_p2, 2)
+
 
 
 # Utility functions for handling terrain.
