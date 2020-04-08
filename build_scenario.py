@@ -26,13 +26,13 @@ GNU General Public License v3.0: See the LICENSE file.
 
 import argparse
 import math
+from enum import Enum
 from typing import List
 from bidict import bidict
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
 from AoE2ScenarioParser.pieces.structs.unit import UnitStruct
 from AoE2ScenarioParser.pieces.structs.variable_change import VariableChangeStruct # pylint: disable=line-too-long
 from AoE2ScenarioParser.datasets import conditions, effects, techs, units
-import util_triggers
 import util
 
 
@@ -80,6 +80,15 @@ INITIAL_VARIABLES = [
 
 # The number of seconds to wait between rounds.
 BETWEEN_ROUND_DELAY = 5
+
+
+class ChangeVarOp(Enum):
+    """Represents the value for the operation of a Change Variable Effect."""
+    set_op = 1
+    add = 2
+    subtract = 3
+    multiply = 4
+    divide = 5
 
 
 # Various utility functions to make dealing with units more ergonomic.
@@ -275,7 +284,7 @@ def initialize_variable_values(scn: AoE2Scenario, trigger_ids) -> None:
     for index, (name, value) in enumerate(INITIAL_VARIABLES):
         change_var = init_vars.add_effect(effects.change_variable)
         change_var.quantity = value
-        change_var.operation = 1 # TODO make an enum for these ops, 1 = SET
+        change_var.operation = ChangeVarOp.set_op.value
         change_var.from_variable = index
         change_var.message = name # Not strictly necessary, since names are set.
 
@@ -297,7 +306,7 @@ def add_start_timer(scn: AoE2Scenario, trigger_ids) -> None:
     timer.timer = BETWEEN_ROUND_DELAY
     inc_round_count = init_timer.add_effect(effects.change_variable)
     inc_round_count.quantity = 1
-    inc_round_count.operation = 2 # TODO enum
+    inc_round_count.operation = ChangeVarOp.add.value
     inc_round_count.from_variable = 5 # TODO magic number alert
     inc_round_count.message = 'round' # TODO magic
 
