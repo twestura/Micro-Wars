@@ -108,6 +108,29 @@ class VarValComp(Enum):
     larger_or_equal = 5
 
 
+def add_trigger(scn: AoE2Scenario, trigger_ids, name: str):
+    """
+    Adds a trigger named name to the scenario and trigger_ids bidict.
+    Raises a ValueError if a trigger with that name already exists.
+    Returns the created trigger object.
+    """
+    if name in trigger_ids:
+        raise ValueError(f'{name} is already the name of a trigger.')
+    trigger_ids[name] = len(trigger_ids)
+    return scn.object_manager.get_trigger_object().add_trigger(name)
+
+
+def add_cond_gaia_defeated(trigger) -> None:
+    """
+    Adds a condition to trigger that the gaia player is defeated.
+
+    This condition will never be True. It can be used to ensure that
+    objectives are never checked off.
+    """
+    gaia_defeated = trigger.add_condition(conditions.player_defeated)
+    gaia_defeated.player = 0
+
+
 # Various utility functions to make dealing with units more ergonomic.
 def get_units_array(scenario: AoE2Scenario, player: int) -> List[UnitStruct]:
     """
@@ -262,13 +285,7 @@ def add_trigger_header(scn: AoE2Scenario, trigger_ids, name: str) -> None:
     trigger with a duplicate name.
     """
     trigger_name = f'-- {name} --'
-    if trigger_name in trigger_ids:
-        raise ValueError(f'A trigger named {trigger_name} already exists.')
-
-    obj_mgr = scn.object_manager
-    trigger_mgr = obj_mgr.get_trigger_object()
-    trigger_mgr.add_trigger(trigger_name)
-    trigger_ids[trigger_name] = len(trigger_ids)
+    add_trigger(scn, trigger_ids, trigger_name)
 
 
 def initialize_variable_values(scn: AoE2Scenario, trigger_ids) -> None:
@@ -276,12 +293,8 @@ def initialize_variable_values(scn: AoE2Scenario, trigger_ids) -> None:
     Initializes the variables used in the scenario to have their
     starting values.
     """
-    obj_mgr = scn.object_manager
-    trigger_mgr = obj_mgr.get_trigger_object()
     trigger_name = '[I] Initialize Variables'
-    assert trigger_name not in trigger_ids
-    trigger_ids[trigger_name] = len(trigger_ids)
-    init_vars = trigger_mgr.add_trigger(trigger_name)
+    init_vars = add_trigger(scn, trigger_ids, trigger_name)
     init_vars.description = 'Initializes variables to their starting values.'
 
     for index, (name, value) in enumerate(INITIAL_VARIABLES):
@@ -297,12 +310,8 @@ def add_start_timer(scn: AoE2Scenario, trigger_ids) -> None:
     Adds a short timer before starting the first round by setting the round
     counter to 1.
     """
-    obj_mgr = scn.object_manager
-    trigger_mgr = obj_mgr.get_trigger_object()
     trigger_name = '[I] Initialize Start Timer'
-    assert trigger_name not in trigger_ids
-    trigger_ids[trigger_name] = len(trigger_ids)
-    init_timer = trigger_mgr.add_trigger(trigger_name)
+    init_timer = add_trigger(scn, trigger_ids, trigger_name)
     init_timer.description = 'Initializes a start timer to start round 1.'
 
     timer = init_timer.add_condition(conditions.timer)
@@ -321,12 +330,8 @@ def set_start_views(scn: AoE2Scenario, trigger_ids) -> None:
     through the Options menu does not work for
     multiplayer scenarios.
     """
-    obj_mgr = scn.object_manager
-    trigger_mgr = obj_mgr.get_trigger_object()
     trigger_name = '[I] Initialize Starting Player Views'
-    assert trigger_name not in trigger_ids
-    trigger_ids[trigger_name] = len(trigger_ids)
-    init_views = trigger_mgr.add_trigger(trigger_name)
+    init_views = add_trigger(scn, trigger_ids, trigger_name)
     init_views.description = 'Changes p1 and p2 view to the middle.'
 
     for player in (1, 2):
@@ -343,6 +348,16 @@ def add_objectives(scn: AoE2Scenario, trigger_ids) -> None:
     on the side of the screen and in the objectives menu.
     """
     add_trigger_header(scn, trigger_ids, 'Objectives')
+
+    score_header_name = '[O] Score Header'
+    score_header = add_trigger(scn, trigger_ids, score_header_name)
+    score_header.display_on_screen = True
+    score_header.description_order = 100
+    score_header.short_description = 'Score'
+    score_header.header = True
+    add_cond_gaia_defeated(score_header)
+    # TODO set score_header attributes
+
     pass # TODO implement
 
 
