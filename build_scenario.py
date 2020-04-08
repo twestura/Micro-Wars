@@ -130,20 +130,6 @@ def units_in_area(unit_array: List[UnitStruct],
             if x1 <= unit_get_x(unit) <= x2 and y1 <= unit_get_y(unit) <= y2]
 
 
-# def unit_max_id(scenario: AoE2Scenario) -> int:
-    """Returns the maximum id of all units in units, or 0 if units is empty."""
-    # scenario.
-    # TODO hmm... maybe take the max over all players? Need number of players
-    # The Scenario stores the "next" id
-    # return max((unit_get_id(unit) for unit in units), default=0)
-
-
-def scenario_num_players(scenario: AoE2Scenario) -> int:
-    """Returns the number of players in the scenario."""
-    # TODO nope, this isn't the number of players, return 9
-    return scenario.parsed_data['UnitsPiece'].retrievers[2].data
-
-
 def unit_change_player(scenario: AoE2Scenario,
                        unit_index: int, i: int, j: int) -> None:
     """
@@ -394,7 +380,7 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
 
     # parse fight data
     # add in minigames
-    events = []
+    # events = []
 
     # Maps a trigger name to its trigger index number.
     trigger_ids = bidict()
@@ -417,21 +403,21 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
 def call_build_scenario(args):
     """Unpacks arguments from command line args and builds the scenario."""
     scenario_map = args.map[0]
-    units = args.units[0]
+    units_scn = args.units[0]
     out = args.output[0]
 
     # Checks the output path is different from all input paths.
     matches = []
     if out == scenario_map:
         matches.append('map')
-    if out == units:
+    if out == units_scn:
         matches.append('units')
     if matches:
         conflicts = ', '.join(matches)
         msg = f"The output path '{out}' conflicts with: {conflicts}."
         raise ValueError(msg)
 
-    build_scenario(scenario_template=scenario_map, unit_template=units,
+    build_scenario(scenario_template=scenario_map, unit_template=units_scn,
                    output=out)
 
 
@@ -448,6 +434,7 @@ def scratch(args): # pylint: disable=unused-argument
     Runs a simple test experiment.
     """
     scratch_path = 'scratch.aoe2scenario'
+    print(scratch_path)
     for name in sorted(TECH_IDS):
         print(name)
     # TODO test naming variables
