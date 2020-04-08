@@ -1,4 +1,8 @@
-"""Represents unit fights or minigames for Micro Wars."""
+"""
+Represents unit fights or minigames for Micro Wars.
+
+GNU General Public License v3.0: See the LICENSE file.
+"""
 
 
 from abc import ABC, abstractmethod

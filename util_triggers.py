@@ -1,4 +1,8 @@
-"""Utility functions for interacting with triggers."""
+"""
+Utility functions for interacting with triggers.
+
+GNU General Public License v3.0: See the LICENSE file.
+"""
 
 
 from AoE2ScenarioParser.datasets import conditions

@@ -1,4 +1,8 @@
-"""Various utility functions used in building Micro Wars!"""
+"""
+Various utility functions used in building Micro Wars!
+
+GNU General Public License v3.0: See the LICENSE file.
+"""
 
 
 import math

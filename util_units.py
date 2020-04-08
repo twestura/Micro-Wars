@@ -1,4 +1,8 @@
-"""Utility functions for various operations with units."""
+"""
+Utility functions for various operations with units.
+
+GNU General Public License v3.0: See the LICENSE file.
+"""
 
 
 import math

@@ -7,11 +7,13 @@ Inspired by Gallas's [MicroMania](http://aok.heavengames.com/blacksmith/showfile
 
 ## Build Instructions
 
-The scenario relies on the parsing library here: [https://github.com/KSneijders/AoE2ScenarioParser](https://github.com/KSneijders/AoE2ScenarioParser)
+The scenario building relies on the parsing library here: [https://github.com/KSneijders/AoE2ScenarioParser](https://github.com/KSneijders/AoE2ScenarioParser)
 
 ```text
 pip install AoE2ScenarioParser
 ```
+
+We also use [bidict](https://pypi.org/project/bidict/) for bidirectional mappings.
 
 ```text
 pip install bidict

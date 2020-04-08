@@ -1,4 +1,8 @@
-"""Tests utility functions."""
+"""
+Tests utility functions.
+
+GNU General Public License v3.0: See the LICENSE file.
+"""
 
 
 import random
