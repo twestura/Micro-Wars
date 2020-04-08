@@ -25,15 +25,12 @@ GNU General Public License v3.0: See the LICENSE file.
 
 
 import argparse
-import math
 from enum import Enum
-from typing import List
 from bidict import bidict
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
-from AoE2ScenarioParser.pieces.structs.unit import UnitStruct
 from AoE2ScenarioParser.pieces.structs.variable_change import VariableChangeStruct # pylint: disable=line-too-long
-from AoE2ScenarioParser.datasets import conditions, effects, techs, units
-import util
+from AoE2ScenarioParser.datasets import conditions, effects, techs
+import util_triggers
 
 
 # Relative path to the template scenario file.
@@ -46,13 +43,6 @@ UNIT_TEMPLATE = 'unit-template.aoe2scenario'
 
 # Default output scenario name.
 OUTPUT = 'Micro Wars.aoe2scenario'
-
-
-# Bidirectional map between unit names and ids.
-UNIT_IDS = bidict()
-for x in units.__dict__:
-    if '__' not in x and 'get_unit_id_by_string' not in x:
-        UNIT_IDS[x] = units.get_unit_id_by_string(x)
 
 
 # Bidirectional map between technology names and ids.
@@ -127,6 +117,9 @@ class ScnData:
         # Bidirectional map from a trigger's name to its index.
         self._trigger_ids = bidict()
 
+        # Bidirectional map from a variable's name to its index.
+        self._var_ids = bidict()
+
     def write_to_file(self, file_path):
         """
         Writes the current scn file to `file_path`.
@@ -134,6 +127,14 @@ class ScnData:
         Overwrites any file currently at that path.
         """
         self._scn.write_to_file(file_path)
+
+    def setup_scenario(self):
+        """
+        Modifies the internal scenario file to support the changes
+        for Micro Wars!
+        """
+        self._name_variables()
+        self._add_initial_triggers()
 
     def _add_trigger(self, name: str):
         """
@@ -146,19 +147,21 @@ class ScnData:
         self._trigger_ids[name] = len(self._trigger_ids)
         return self._scn.object_manager.get_trigger_object().add_trigger(name)
 
-    def name_variables(self) -> None:
+    def _name_variables(self) -> None:
         """Sets the names for trigger variables in the scenario."""
         trigger_piece = self._scn.parsed_data['TriggerPiece']
         var_count = trigger_piece.retrievers[6]
         var_change = trigger_piece.retrievers[7].data
         for name, __ in INITIAL_VARIABLES:
             var = VariableChangeStruct()
-            var.retrievers[0].data = var_count.data
+            index = var_count.data
+            self._var_ids[name] = index
+            var.retrievers[0].data = index
             var.retrievers[1].data = name
             var_change.append(var)
             var_count.data += 1
 
-    def add_initial_triggers(self) -> None:
+    def _add_initial_triggers(self) -> None:
         """
         Adds initial triggers for initializing variables,
         listing player objectives, and starting the first round.
@@ -213,8 +216,8 @@ class ScnData:
         inc_round_count = init_timer.add_effect(effects.change_variable)
         inc_round_count.quantity = 1
         inc_round_count.operation = ChangeVarOp.add.value
-        inc_round_count.from_variable = 5 # TODO magic number alert
-        inc_round_count.message = 'round' # TODO magic
+        inc_round_count.from_variable = self._var_ids['round']
+        inc_round_count.message = 'round'
 
 
     def _set_start_views(self) -> None:
@@ -250,14 +253,14 @@ class ScnData:
         obj_title.description_order = 200
         obj_title.header = True
         obj_title.description = 'Micro Wars!'
-        add_cond_gaia_defeated(obj_title)
+        util_triggers.add_cond_gaia_defeated(obj_title)
 
         obj_description_name = '[O] Objectives Description'
         obj_description = self._add_trigger(obj_description_name)
         obj_description.display_as_objective = True
         obj_description.description_order = 199
         obj_description.description = "Each round is worth 100 points. Win points by killing your opponent's units or by completing special objectives." # pylint: disable=line-too-long
-        add_cond_gaia_defeated(obj_description)
+        util_triggers.add_cond_gaia_defeated(obj_description)
 
         obj_score_header_name = '[O] Objectives Score Header'
         obj_score_header = self._add_trigger(obj_score_header_name)
@@ -265,7 +268,7 @@ class ScnData:
         obj_score_header.description_order = 100
         obj_score_header.description = 'Score:'
         obj_score_header.header = True
-        add_cond_gaia_defeated(obj_score_header)
+        util_triggers.add_cond_gaia_defeated(obj_score_header)
 
         obj_score_p1_name = '[O] Objectives Score P1'
         obj_score_p1 = self._add_trigger(obj_score_p1_name)
@@ -274,7 +277,7 @@ class ScnData:
         obj_score_p1.description = 'Player 1: <p1-score>'
         obj_p1_wins_cond = obj_score_p1.add_condition(conditions.variable_value)
         obj_p1_wins_cond.amount_or_quantity = 1
-        obj_p1_wins_cond.variable = 3 # TODO magic number
+        obj_p1_wins_cond.variable = self._var_ids['p1-wins']
         obj_p1_wins_cond.comparison = VarValComp.equal.value
 
         obj_score_p2_name = '[O] Objectives Score P2'
@@ -284,7 +287,7 @@ class ScnData:
         obj_score_p2.description = 'Player 2: <p2-score>'
         obj_p2_wins_cond = obj_score_p2.add_condition(conditions.variable_value)
         obj_p2_wins_cond.amount_or_quantity = 1
-        obj_p2_wins_cond.variable = 4 # TODO magic number
+        obj_p2_wins_cond.variable = self._var_ids['p2-wins']
         obj_p2_wins_cond.comparison = VarValComp.equal.value
 
         # Displayed Objectives
@@ -294,7 +297,7 @@ class ScnData:
         disp_score_header.description_order = 100
         disp_score_header.short_description = 'Score:'
         disp_score_header.header = True
-        add_cond_gaia_defeated(disp_score_header)
+        util_triggers.add_cond_gaia_defeated(disp_score_header)
 
         disp_score_p1_name = '[O] Display Score P1'
         disp_score_p1 = self._add_trigger(disp_score_p1_name)
@@ -304,7 +307,7 @@ class ScnData:
         disp_p1_wins_cond = disp_score_p1.add_condition(
             conditions.variable_value)
         disp_p1_wins_cond.amount_or_quantity = 1
-        disp_p1_wins_cond.variable = 3 # TODO magic number
+        disp_p1_wins_cond.variable = self._var_ids['p1-wins']
         disp_p1_wins_cond.comparison = VarValComp.equal.value
 
         disp_score_p2_name = '[O] Display Score P2'
@@ -315,138 +318,10 @@ class ScnData:
         disp_p2_wins_cond = disp_score_p2.add_condition(
             conditions.variable_value)
         disp_p2_wins_cond.amount_or_quantity = 1
-        disp_p2_wins_cond.variable = 4 # TODO magic number
+        disp_p2_wins_cond.variable = self._var_ids['p2-wins']
         disp_p2_wins_cond.comparison = VarValComp.equal.value
 
-
-def add_cond_gaia_defeated(trigger) -> None:
-    """
-    Adds a condition to trigger that the gaia player is defeated.
-
-    This condition will never be True. It can be used to ensure that
-    objectives are never checked off.
-    """
-    gaia_defeated = trigger.add_condition(conditions.player_defeated)
-    gaia_defeated.player = 0
-
-
-# Various utility functions to make dealing with units more ergonomic.
-def get_units_array(scenario: AoE2Scenario, player: int) -> List[UnitStruct]:
-    """
-    Returns the array of units in scenario for the given player.
-
-    Raises a ValueError if player is not in 1, ..., 8.
-    """
-    if player < 1 or player > 8:
-        msg = f'Player number {player} is not between 1 and 8 (inclusive).'
-        raise ValueError(msg)
-    player_units = scenario.parsed_data['UnitsPiece'].retrievers[4].data[player]
-    return player_units.retrievers[1].data
-
-
-def units_in_area(unit_array: List[UnitStruct],
-                  x1: float, y1: float,
-                  x2: float, y2: float) -> List[UnitStruct]:
-    """Returns all units in the square with corners (x1, y1) and (x2, y2)."""
-    return [unit for unit in unit_array
-            if x1 <= unit_get_x(unit) <= x2 and y1 <= unit_get_y(unit) <= y2]
-
-
-def unit_change_player(scenario: AoE2Scenario,
-                       unit_index: int, i: int, j: int) -> None:
-    """
-    Moves a unit from control of player i to player j.
-    unit_index is the original index of the unit to move in the units array
-    of player i.
-
-    Raises a ValueError if i == j, if i and j are not valid players
-    in the scenario, or if unit_index is not a valid unit index.
-    """
-    # There is a PlayerUnits struct that has the unit count and the
-    # array of units.
-    # TODO raise ValueError
-    if i == j:
-        raise ValueError(f'Player numbers must be different, both are {i}.')
-    pi_units = scenario.parsed_data['UnitsPiece'].retrievers[4].data[i]
-    pj_units = scenario.parsed_data['UnitsPiece'].retrievers[4].data[j]
-
-    # Changes the array lengths.
-    pi_units.retrievers[0].data -= 1
-    pj_units.retrievers[0].data += 1
-
-    # Transfers the unit.
-    unit = pi_units.retrievers[1].data[unit_index]
-    del pi_units.retrievers[1].data[unit_index]
-    pj_units.retrievers[1].data.append(unit)
-
-
-def unit_get_x(unit: UnitStruct) -> float:
-    """Returns the unit's x coordinate."""
-    return unit.retrievers[0].data
-
-
-def unit_get_y(unit: UnitStruct) -> float:
-    """Returns the unit's y coordinate."""
-    return unit.retrievers[1].data
-
-
-def unit_set_x(unit: UnitStruct, x: float):
-    """Sets the unit's x coordinate to x."""
-    # TODO handle out of bounds errors
-    unit.retrievers[0].data = x
-
-
-def unit_set_y(unit: UnitStruct, y: float):
-    """Sets the unit's y coordinate to y."""
-    # TODO handle out of bounds errors
-    unit.retrievers[1].data = y
-
-
-def unit_get_tile(unit: UnitStruct) -> (int, int):
-    """
-    Returns the integer x and y coordinates of the tile on which
-    the unit is positioned.
-    """
-    return (int(unit_get_x(unit)), int(unit_get_y(unit)))
-
-
-def unit_get_id(unit: UnitStruct) -> int:
-    """Returns the unit's id number."""
-    return unit.retrievers[3].data
-
-
-def unit_get_facing(unit: UnitStruct) -> float:
-    """Returns the angle (in radians) giving the unit's facing direction."""
-    return unit.retrievers[6].data
-
-
-def unit_set_facing(unit: UnitStruct, theta: float) -> None:
-    """
-    Sets unit to face the direction given by the angle theta.
-
-    Raises:
-        ValueError if theta does not satisfy 0 <= theta < math.tau.
-    """
-    if theta < 0.0 or theta >= math.tau:
-        raise ValueError(f'theta {theta} is not in [0, tau).')
-    unit.retrievers[6].data = theta
-
-
-def unit_facing_flip_h(unit: UnitStruct) -> None:
-    """Mirrors the unit's facing across a horizontal axis (math.pi / 4.0)."""
-    # Mods by tau because the scenario editor seems to place units facing
-    # at radian angles not strictly less than tau.
-    theta = unit_get_facing(unit) % math.tau
-    phi = util.flip_angle_h(theta)
-    unit_set_facing(unit, phi)
-
-
-def unit_get_name(unit: UnitStruct) -> str:
-    """Returns the string name of the unit (e.g. Militia, Archer)."""
-    unit_constant = unit.retrievers[4].data
-    # TODO find out how to use the unit constant to get the name.
-    print(unit_constant)
-    return ''
+        # TODO add objectives for individual rounds
 
 
 # Utility functions for handling terrain.
@@ -470,26 +345,12 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
         output: The output path to which the resulting scenario is written.
     """
     scn_data = ScnData.from_file(scenario_template)
-
     # units_scn = AoE2Scenario(unit_template)
-
     # parse fight data
     # add in minigames
     # events = []
-
-    scn_data.name_variables()
-    scn_data.add_initial_triggers()
-
-    # for event in events:
-    #     event.add_triggers(triggers)
-
-    # add victory condition triggers
-
+    scn_data.setup_scenario()
     scn_data.write_to_file(output)
-
-    print('Triggers:')
-    for name, index in scn_data._trigger_ids.items():
-        print(f'{index}: {name}')
 
 
 def call_build_scenario(args):
