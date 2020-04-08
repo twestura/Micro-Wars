@@ -101,11 +101,11 @@ class ChangeVarOp(Enum):
 
 class VarValComp(Enum):
     """Represents the value for the comparison of a Variable Value Condition."""
-    equal = 1
-    less = 2
-    larger = 3
-    less_or_equal = 4
-    larger_or_equal = 5
+    equal = 0
+    less = 1
+    larger = 2
+    less_or_equal = 3
+    larger_or_equal = 4
 
 
 def add_trigger(scn: AoE2Scenario, trigger_ids, name: str):
@@ -349,16 +349,79 @@ def add_objectives(scn: AoE2Scenario, trigger_ids) -> None:
     """
     add_trigger_header(scn, trigger_ids, 'Objectives')
 
-    score_header_name = '[O] Score Header'
-    score_header = add_trigger(scn, trigger_ids, score_header_name)
-    score_header.display_on_screen = True
-    score_header.description_order = 100
-    score_header.short_description = 'Score'
-    score_header.header = True
-    add_cond_gaia_defeated(score_header)
-    # TODO set score_header attributes
+    # Menu objectives
+    obj_title_name = '[O] Objectives Title'
+    obj_title = add_trigger(scn, trigger_ids, obj_title_name)
+    obj_title.display_as_objective = True
+    obj_title.description_order = 200
+    obj_title.header = True
+    obj_title.description = 'Micro Wars!'
+    add_cond_gaia_defeated(obj_title)
 
-    pass # TODO implement
+    obj_description_name = '[O] Objectives Description'
+    obj_description = add_trigger(scn, trigger_ids, obj_description_name)
+    obj_description.display_as_objective = True
+    obj_description.description_order = 199
+    obj_description.description = "Each round is worth 100 points. Win points by killing your opponent's units or by completing special objectives." # pylint: disable=line-too-long
+    add_cond_gaia_defeated(obj_description)
+
+
+    obj_score_header_name = '[O] Objectives Score Header'
+    obj_score_header = add_trigger(scn, trigger_ids, obj_score_header_name)
+    obj_score_header.display_as_objective = True
+    obj_score_header.description_order = 100
+    obj_score_header.description = 'Score:'
+    obj_score_header.header = True
+    add_cond_gaia_defeated(obj_score_header)
+
+    obj_score_p1_name = '[O] Objectives Score P1'
+    obj_score_p1 = add_trigger(scn, trigger_ids, obj_score_p1_name)
+    obj_score_p1.display_as_objective = True
+    obj_score_p1.description_order = 99
+    obj_score_p1.description = 'Player 1: <p1-score>'
+    obj_p1_wins_cond = obj_score_p1.add_condition(conditions.variable_value)
+    obj_p1_wins_cond.amount_or_quantity = 1
+    obj_p1_wins_cond.variable = 3 # TODO magic number
+    obj_p1_wins_cond.comparison = VarValComp.equal.value
+
+    obj_score_p2_name = '[O] Objectives Score P2'
+    obj_score_p2 = add_trigger(scn, trigger_ids, obj_score_p2_name)
+    obj_score_p2.display_as_objective = True
+    obj_score_p2.description_order = 98
+    obj_score_p2.description = 'Player 2: <p2-score>'
+    obj_p2_wins_cond = obj_score_p2.add_condition(conditions.variable_value)
+    obj_p2_wins_cond.amount_or_quantity = 1
+    obj_p2_wins_cond.variable = 4 # TODO magic number
+    obj_p2_wins_cond.comparison = VarValComp.equal.value
+
+    # Displayed Objectives
+    disp_score_header_name = '[O] Display Score Header'
+    disp_score_header = add_trigger(scn, trigger_ids, disp_score_header_name)
+    disp_score_header.display_on_screen = True
+    disp_score_header.description_order = 100
+    disp_score_header.short_description = 'Score:'
+    disp_score_header.header = True
+    add_cond_gaia_defeated(disp_score_header)
+
+    disp_score_p1_name = '[O] Display Score P1'
+    disp_score_p1 = add_trigger(scn, trigger_ids, disp_score_p1_name)
+    disp_score_p1.display_on_screen = True
+    disp_score_p1.description_order = 99
+    disp_score_p1.short_description = 'P1: <p1-score>'
+    disp_p1_wins_cond = disp_score_p1.add_condition(conditions.variable_value)
+    disp_p1_wins_cond.amount_or_quantity = 1
+    disp_p1_wins_cond.variable = 3 # TODO magic number
+    disp_p1_wins_cond.comparison = VarValComp.equal.value
+
+    disp_score_p2_name = '[O] Display Score P2'
+    disp_score_p2 = add_trigger(scn, trigger_ids, disp_score_p2_name)
+    disp_score_p2.display_on_screen = True
+    disp_score_p2.description_order = 98
+    disp_score_p2.short_description = 'P2: <p2-score>'
+    disp_p2_wins_cond = disp_score_p2.add_condition(conditions.variable_value)
+    disp_p2_wins_cond.amount_or_quantity = 1
+    disp_p2_wins_cond.variable = 4 # TODO magic number
+    disp_p2_wins_cond.comparison = VarValComp.equal.value
 
 
 # TODO how mutually to activate/deactivate triggers?
