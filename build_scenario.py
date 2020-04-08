@@ -365,7 +365,6 @@ def add_objectives(scn: AoE2Scenario, trigger_ids) -> None:
     obj_description.description = "Each round is worth 100 points. Win points by killing your opponent's units or by completing special objectives." # pylint: disable=line-too-long
     add_cond_gaia_defeated(obj_description)
 
-
     obj_score_header_name = '[O] Objectives Score Header'
     obj_score_header = add_trigger(scn, trigger_ids, obj_score_header_name)
     obj_score_header.display_as_objective = True
