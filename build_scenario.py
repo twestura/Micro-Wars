@@ -82,6 +82,14 @@ INITIAL_VARIABLES = [
 BETWEEN_ROUND_DELAY = 5
 
 
+# X coordinate of the player's starting view.
+START_VIEW_X = 120
+
+
+# Y coordinate of the player's starting view.
+START_VIEW_Y = 119
+
+
 class ChangeVarOp(Enum):
     """Represents the value for the operation of a Change Variable Effect."""
     set_op = 1
@@ -89,6 +97,15 @@ class ChangeVarOp(Enum):
     subtract = 3
     multiply = 4
     divide = 5
+
+
+class VarValComp(Enum):
+    """Represents the value for the comparison of a Variable Value Condition."""
+    equal = 1
+    less = 2
+    larger = 3
+    less_or_equal = 4
+    larger_or_equal = 5
 
 
 # Various utility functions to make dealing with units more ergonomic.
@@ -311,6 +328,38 @@ def add_start_timer(scn: AoE2Scenario, trigger_ids) -> None:
     inc_round_count.message = 'round' # TODO magic
 
 
+def set_start_views(scn: AoE2Scenario, trigger_ids) -> None:
+    """
+    Uses Change View Effects to set the player start views.
+    This trigger is a workaround, since setting the start views
+    through the Options menu does not work for
+    multiplayer scenarios.
+    """
+    obj_mgr = scn.object_manager
+    trigger_mgr = obj_mgr.get_trigger_object()
+    trigger_name = '[I] Initialize Starting Player Views'
+    assert trigger_name not in trigger_ids
+    trigger_ids[trigger_name] = len(trigger_ids)
+    init_views = trigger_mgr.add_trigger(trigger_name)
+    init_views.description = 'Changes p1 and p2 view to the middle.'
+
+    for player in (1, 2):
+        change_view = init_views.add_effect(effects.change_view)
+        change_view.player_source = player
+        change_view.location_x = START_VIEW_X
+        change_view.location_y = START_VIEW_Y
+        change_view.scroll = False
+
+
+def add_objectives(scn: AoE2Scenario, trigger_ids) -> None:
+    """
+    Sets up the player objectives to display the score both
+    on the side of the screen and in the objectives menu.
+    """
+    add_trigger_header(scn, trigger_ids, 'Objectives')
+    pass # TODO implement
+
+
 # TODO how mutually to activate/deactivate triggers?
 # Should I keep a map from trigger name to trigger id?
 
@@ -322,9 +371,8 @@ def add_initial_triggers(scn: AoE2Scenario, trigger_ids) -> None:
     add_trigger_header(scn, trigger_ids, 'Init')
     initialize_variable_values(scn, trigger_ids)
     add_start_timer(scn, trigger_ids)
-    # TODO player start views
-    add_trigger_header(scn, trigger_ids, 'Objectives')
-    # TODO objectives
+    set_start_views(scn, trigger_ids)
+    add_objectives(scn, trigger_ids)
 
 
 def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
