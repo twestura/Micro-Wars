@@ -27,6 +27,7 @@ GNU General Public License v3.0: See the LICENSE file.
 import argparse
 from collections import defaultdict
 from enum import Enum
+from typing import Dict, Set, Tuple
 from bidict import bidict
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
 from AoE2ScenarioParser.pieces.structs.variable_change import VariableChangeStruct # pylint: disable=line-too-long
@@ -132,10 +133,10 @@ class ScnData:
         self._var_ids = bidict()
 
         # Maps the name of a trigger t to a set of triggers that t activates.
-        self._activate_triggers = defaultdict(set)
+        self._activate_triggers: Dict[str, Set[str]] = defaultdict(set)
 
         # Maps the name of a trigger t to a set of triggers that t deactivates.
-        self._deactivate_triggers = defaultdict(set)
+        self._deactivate_triggers: Dict[str, Set[str]] = defaultdict(set)
 
     def _add_activate_and_deactivate_effects(self):
         """
@@ -440,7 +441,7 @@ class ScnData:
 
 
 # Utility functions for handling terrain.
-def map_dimensions(scenario: AoE2Scenario) -> (int, int):
+def map_dimensions(scenario: AoE2Scenario) -> Tuple[int, int]:
     map_piece = scenario.parsed_data['MapPiece']
     width = map_piece.retrievers[9].data
     height = map_piece.retrievers[10].data
@@ -460,10 +461,9 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
         output: The output path to which the resulting scenario is written.
     """
     scn_data = ScnData.from_file(scenario_template)
-    # units_scn = AoE2Scenario(unit_template)
-    # parse fight data
-    fight_list = fight.load_fights()
-    print(fight_list)
+    units_scn = AoE2Scenario(unit_template)
+    fight_data_list = fight.load_fight_data()
+    fight.validate_fights(units_scn, fight_data_list)
     # add in minigames
     # events = []
     scn_data.setup_scenario()

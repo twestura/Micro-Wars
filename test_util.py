@@ -6,7 +6,7 @@ GNU General Public License v3.0: See the LICENSE file.
 
 
 import random
-from nose.tools import * # pylint: disable=wildcard-import,unused-wildcard-import
+from nose.tools import assert_almost_equal, eq_, raises
 from util import * # pylint: disable=wildcard-import
 
 

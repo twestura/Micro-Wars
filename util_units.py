@@ -6,7 +6,7 @@ GNU General Public License v3.0: See the LICENSE file.
 
 
 import math
-from typing import List
+from typing import List, Tuple
 from bidict import bidict
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
 from AoE2ScenarioParser.pieces.structs.unit import UnitStruct
@@ -16,9 +16,9 @@ import util
 
 # Bidirectional map between unit names and ids.
 UNIT_IDS = bidict()
-for x in units.__dict__:
-    if '__' not in x and 'get_unit_id_by_string' not in x:
-        UNIT_IDS[x] = units.get_unit_id_by_string(x)
+for u in units.__dict__:
+    if '__' not in u and 'get_unit_id_by_string' not in u:
+        UNIT_IDS[u] = units.get_unit_id_by_string(u)
 
 
 def is_unit(unit_name: str) -> bool:
@@ -100,7 +100,7 @@ def set_y(unit: UnitStruct, y: float):
     unit.retrievers[1].data = y
 
 
-def get_tile(unit: UnitStruct) -> (int, int):
+def get_tile(unit: UnitStruct) -> Tuple[int, int]:
     """
     Returns the integer x and y coordinates of the tile on which
     the unit is positioned.
