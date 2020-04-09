@@ -21,6 +21,11 @@ for x in units.__dict__:
         UNIT_IDS[x] = units.get_unit_id_by_string(x)
 
 
+def is_unit(unit_name: str) -> bool:
+    """Returns True if unit_name is a valid unit name, False otherwise."""
+    return unit_name in UNIT_IDS
+
+
 def get_units_array(scenario: AoE2Scenario, player: int) -> List[UnitStruct]:
     """
     Returns the array of units in scenario for the given player.

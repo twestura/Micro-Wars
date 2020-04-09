@@ -30,7 +30,8 @@ from enum import Enum
 from bidict import bidict
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
 from AoE2ScenarioParser.pieces.structs.variable_change import VariableChangeStruct # pylint: disable=line-too-long
-from AoE2ScenarioParser.datasets import conditions, effects, techs
+from AoE2ScenarioParser.datasets import conditions, effects
+import fight
 import util_triggers
 
 
@@ -44,13 +45,6 @@ UNIT_TEMPLATE = 'unit-template.aoe2scenario'
 
 # Default output scenario name.
 OUTPUT = 'Micro Wars.aoe2scenario'
-
-
-# Bidirectional map between technology names and ids.
-TECH_IDS = bidict()
-for x in techs.__dict__:
-    if '__' not in x and 'get_tech_id_by_string' not in x:
-        TECH_IDS[x] = techs.get_tech_id_by_string(x)
 
 
 # The number of scenario editor variables.
@@ -468,6 +462,8 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
     scn_data = ScnData.from_file(scenario_template)
     # units_scn = AoE2Scenario(unit_template)
     # parse fight data
+    fight_list = fight.load_fights()
+    print(fight_list)
     # add in minigames
     # events = []
     scn_data.setup_scenario()
@@ -509,8 +505,6 @@ def scratch(args): # pylint: disable=unused-argument
     """
     scratch_path = 'scratch.aoe2scenario'
     print(scratch_path)
-    for name in sorted(TECH_IDS):
-        print(name)
     # TODO test naming variables
     # scn = AoE2Scenario(scratch_path)
     # trigger_mgr = scn.object_manager.get_trigger_object()

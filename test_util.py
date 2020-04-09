@@ -82,3 +82,15 @@ def test_flip_angle_h_8():
         theta = random.uniform(0.0, math.tau) % math.tau
         double_flip = flip_angle_h(flip_angle_h(theta))
         assert_almost_equal(theta, double_flip)
+
+
+def test_pretty_name0():
+    eq_('Militia', pretty_print_name('militia'))
+
+
+def test_pretty_name1():
+    eq_('Scout Cavalry', pretty_print_name('scout_cavalry'))
+
+
+def test_pretty_name2():
+    eq_('Elite Chu Ko Nu', pretty_print_name('elite_chu_ko_nu'))

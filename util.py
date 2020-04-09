@@ -31,3 +31,13 @@ def flip_angle_h(theta: float) -> float:
 
     assert 0.0 <= phi < math.tau, f'theta: {theta}, phi: {phi}'
     return phi
+
+
+def pretty_print_name(name: str) -> str:
+    """
+    Returns a pretty-printed version of the name string.
+    Replaces all underscores with spaces and capitalizes the first letter
+    of each word.
+    For example, elite_chu_ko_nu -> Elite Chu Ko Nu.
+    """
+    return ' '.join(s[0].upper() + s[1:] for s in name.split('_'))
