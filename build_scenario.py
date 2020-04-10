@@ -93,6 +93,18 @@ START_VIEW_X = 120
 START_VIEW_Y = 119
 
 
+# The x coordinate of the location around which to center fights.
+FIGHT_CENTER_X = 120
+
+
+# The y coordinate of the location around which to center fights.
+FIGHT_CENTER_Y = 119
+
+
+# The number of tiles from the center an army's average should start.
+FIGHT_OFFSET = 5
+
+
 class ChangeVarOp(Enum):
     """Represents the value for the operation of a Change Variable Effect."""
     set_op = 1
@@ -464,7 +476,8 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
     units_scn = AoE2Scenario(unit_template)
     fight_data_list = fight.load_fight_data()
     # fight.validate_fights(units_scn, fight_data_list)
-    fights = fight.make_fights(units_scn, fight_data_list)
+    fights = fight.make_fights(units_scn, fight_data_list,
+                               FIGHT_CENTER_X, FIGHT_CENTER_Y, FIGHT_OFFSET)
     # TODO include fights in scn data?
     # pass the scenario object and the fights list as input?
     # Or pass both the units scn and the fights as input?
@@ -473,9 +486,25 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
 
     scn_data.setup_scenario()
     scn_data.write_to_file(output)
-    for f in fights:
-        print('Values:')
+
+    for k, f in enumerate(fights):
+        print(f'Values {k}:')
         print(f.objectives_description())
+        print(f'p1 bonus: {f.p1_bonus}, p2 bonus: {f.p2_bonus}')
+        print('P1 Units:')
+        for unit in f.p1_units:
+            name = util_units.get_name(unit)
+            x = util_units.get_x(unit)
+            y = util_units.get_y(unit)
+            theta = util_units.get_facing(unit)
+            print(f'  {name} - ({x}, {y}) - facing {theta}')
+        print('P2 Units:')
+        for unit in f.p2_units:
+            name = util_units.get_name(unit)
+            x = util_units.get_x(unit)
+            y = util_units.get_y(unit)
+            theta = util_units.get_facing(unit)
+            print(f'  {name} - ({x}, {y}) - facing {theta}')
 
 
 def call_build_scenario(args):

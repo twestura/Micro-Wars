@@ -5,6 +5,7 @@ GNU General Public License v3.0: See the LICENSE file.
 """
 
 
+import copy
 import json
 from enum import Enum
 from typing import Dict, List, Tuple
@@ -92,38 +93,52 @@ class FightType(Enum):
 
 class Fight:
     """
-    Represents either a symmetrical fight with one unit source player
-    or an asymmetrical fight with two unit source players.
+    Represents a fight between players with two groups of units.
 
-    A symmetrical fight consists of a single round where each player's units
-    mirrors the other's units.
-    An asymmetrical fight consists of two rounds where each player has
-    a different army composition. After the first round, the players
-    swap armies.
+    The individual units are positioned in the place where they are teleported
+    for the fight to begin.
     """
 
-    def __init__(self,
-                 fight_data: FightData,
-                 player_units: Dict[int, List[UnitStruct]]):
+    def __init__(self, fight_data: FightData,
+                 p1_units: List[UnitStruct], p2_units: List[UnitStruct]):
         """
         Initializes a new fight with the fight data and unit lists.
 
-        Raise a ValueError if the point values exceed the max limit
-        or if there is no point value for some unit in the fight.
+        Raise a ValueError if a player has no units, if the total
+        possible point values exceed the max limit, or if there is
+        no point value for some unit in the fight.
         """
         self.techs = fight_data.techs
         self.points = fight_data.points
-        # self.player_units[k] is the list of units for player k.
-        # If self.player_units[2] is empty, the fight is symmetrical.
-        # Otherwise the fight is asymmetrical.
-        self.player_units = player_units
-        if not player_units[1]:
-            raise ValueError(f'This fight has no units.')
+        self.p1_units = p1_units
+        self.p2_units = p2_units
 
-    @property
-    def fight_type(self):
-        """Returns whether this fight is symmetrical or asymmetrical."""
-        return FightType.asym if self.player_units[2] else FightType.sym
+        if not self.p1_units:
+            raise ValueError('Player 1 has no units.')
+        if not self.p2_units:
+            raise ValueError('Player 2 has no units.')
+
+        self._p1_bonus = MAX_POINTS
+        for unit in self.p1_units:
+            name = util_units.get_name(unit)
+            if name not in self.points:
+                raise ValueError(f'There is no point value for {name}.')
+            pts = self.points[name]
+            self._p1_bonus -= pts
+            if self._p1_bonus < 0:
+                msg = f"Player 1's units exceed the point limit {MAX_POINTS}."
+                raise ValueError(msg)
+
+        self._p2_bonus = MAX_POINTS
+        for unit in self.p2_units:
+            name = util_units.get_name(unit)
+            if name not in self.points:
+                raise ValueError(f'There is no point value for {name}.')
+            pts = self.points[name]
+            self._p2_bonus -= pts
+            if self._p2_bonus < 0:
+                msg = f"Player 2's units exceed the point limit {MAX_POINTS}."
+                raise ValueError(msg)
 
     def objectives_description(self) -> str:
         """
@@ -131,91 +146,78 @@ class Fight:
         The objectives include each unit name and the number of points
         the unit is worth, organized from highest to lowest point value.
         """
-        str_components = [
+        return '\n'.join(
             f'* {util.pretty_print_name(name)}: {points}'
             for name, points in sorted(self.points.items(), key=lambda t: -t[1])
-        ]
-        return '\n'.join(str_components)
+        )
+
+    @property
+    def p1_bonus(self):
+        """
+        Returns the number of bonus points Player 1 earns for winning
+        this Fight.
+        """
+        return self._p1_bonus
+
+    @property
+    def p2_bonus(self):
+        """
+        Returns the number of bonus points Player 2 earns for winning
+        this Fight.
+        """
+        return self._p2_bonus
 
 
-def make_fights(units_scn: AoE2Scenario, fd: List[FightData]) -> List[Fight]:
+def make_fights(units_scn: AoE2Scenario, fds: List[FightData],
+                center_x: int, center_y: int, offset: int) -> List[Fight]:
     """
     Raises a ValueError if there is an invalid fight, or if there are too many
     fights.
+
+    center_x and center_y are the coordinates around which the fight is
+    centered.
+    offset is the number of tiles away from the center to move the units.
 
     The fight at index k is loaded at the kth tile in the units_scn.
     """
-    num_fights = len(fd)
+    num_fights = len(fds)
     if num_fights > FIGHT_LIMIT:
         msg = f'There are {num_fights} fights, but the limit is {FIGHT_LIMIT}.'
         raise ValueError(msg)
+    center = (center_x, center_y)
 
-    overall_units = {
-        1: util_units.get_units_array(units_scn, 1),
-        2: util_units.get_units_array(units_scn, 2),
-    }
+    p1_units_all = util_units.get_units_array(units_scn, 1)
+    p2_units_all = util_units.get_units_array(units_scn, 2)
 
     fights = []
-    for index, fight in enumerate(fd):
+    for index, fd in enumerate(fds):
         x1, y1 = get_start_tile(index)
         x2, y2 = x1 + TILE_WIDTH, y1 + TILE_WIDTH
-        fight_units = {
-            1: util_units.units_in_area(overall_units[1], x1, y1, x2, y2),
-            2: util_units.units_in_area(overall_units[2], x1, y1, x2, y2),
-        }
-        if not fight_units[1]:
+        p1_units = util_units.units_in_area(p1_units_all, x1, y1, x2, y2)
+        if not p1_units:
             raise ValueError(f'Fight {index} has no units.')
-        for units_in_square in fight_units.values():
-            points = 0
-            for unit in units_in_square:
-                name = util_units.get_name(unit)
-                if name not in fight.points:
-                    msg = f'{name} is not a unit in fight {index}.'
-                    raise ValueError(msg)
-                points += fight.points[name]
-                if points > MAX_POINTS:
-                    msg = f'Fight {index} points {points} > limit {MAX_POINTS}.'
-                    raise ValueError(msg)
-        fights.append(Fight(fight, overall_units))
+        p2_units = util_units.units_in_area(p2_units_all, x1, y1, x2, y2)
+        if not p2_units:
+            # Symmetrical fight where only 1 player has units.
+            # Creates a single, mirrored fight.
+            p2_units = [copy.deepcopy(unit) for unit in p1_units]
+            util_units.center_units(p1_units, center, offset)
+            util_units.center_units_flip(p2_units, center, offset)
+            fights.append(Fight(fd, p1_units, p2_units))
+        else:
+            # Asymmetrical fight where p1 and p2 both have units.
+            # Creates two rounds, with players switching units between fights.
+            p1_units2 = [copy.deepcopy(unit) for unit in p2_units]
+            p2_units2 = [copy.deepcopy(unit) for unit in p1_units]
+
+            util_units.center_units(p1_units, center, offset)
+            util_units.center_units(p2_units, center, offset)
+            fights.append(Fight(fd, p1_units, p2_units))
+
+            util_units.center_units_flip(p1_units2, center, offset)
+            util_units.center_units_flip(p2_units2, center, offset)
+            fights.append(Fight(fd, p1_units2, p2_units2))
     return fights
-
-
-# TODO instead of just validation, let's create actual fight objects
-# These objects can then be processed to add the triggers by the scenario.
-
-def validate_fights(units_scn: AoE2Scenario, fights: List[FightData]) -> None:
-    """
-    Raises a ValueError if there is an invalid fight, or if there are too many
-    fights.
-
-    The fight at index k is loaded at the kth tile.
-    """
-    num_fights = len(fights)
-    if num_fights > FIGHT_LIMIT:
-        msg = f'There are {num_fights} fights, but the limit is {FIGHT_LIMIT}.'
-        raise ValueError(msg)
-
-    player_units = {
-        1: util_units.get_units_array(units_scn, 1),
-        2: util_units.get_units_array(units_scn, 2),
-    }
-
-    for index, fight in enumerate(fights):
-        for units_array in player_units.values():
-            x1, y1 = get_start_tile(index)
-            x2, y2 = x1 + TILE_WIDTH, y1 + TILE_WIDTH
-            units_in_square = util_units.units_in_area(units_array,
-                                                       x1, y1, x2, y2)
-            points = 0
-            for unit in units_in_square:
-                name = util_units.get_name(unit)
-                if name not in fight.points:
-                    msg = f'{name} is not a unit in fight {index}.'
-                    raise ValueError(msg)
-                points += fight.points[name]
-                if points > MAX_POINTS:
-                    msg = f'Fight {index} points {points} > limit {MAX_POINTS}.'
-                    raise ValueError(msg)
 
 
 def load_fight_data(filepath: str = DEFAULT_FILE) -> List[FightData]:

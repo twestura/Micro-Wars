@@ -191,3 +191,26 @@ def center_pos_flipped(unit: UnitStruct, avg: Tuple[float, float],
     x += center[0] - offset
     y += center[1] + offset
     return (int(x), int(y))
+
+def center_units(unit_array: List[UnitStruct], center: Tuple[float, float],
+                 offset: int) -> None:
+    """Centers the units in unit_array with distance offset from the center."""
+    avg = avg_pos(unit_array)
+    for unit in unit_array:
+        new_pos = center_pos(unit, avg, center, offset)
+        set_x(unit, new_pos[0])
+        set_y(unit, new_pos[1])
+
+
+def center_units_flip(unit_array: List[UnitStruct], center: Tuple[float, float],
+                      offset: int) -> None:
+    """
+    Centers and flips the units in unit_array with distance offset from
+    the center.
+    """
+    avg = avg_pos(unit_array)
+    for unit in unit_array:
+        flip_facing_h(unit)
+        new_pos = center_pos_flipped(unit, avg, center, offset)
+        set_x(unit, new_pos[0])
+        set_y(unit, new_pos[1])
