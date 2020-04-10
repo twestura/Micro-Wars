@@ -16,12 +16,12 @@ GNU General Public License v3.0: See the LICENSE file.
 # Object trigger accepts two integer coordinates and places the unit at the
 # left corner of the corresponding tile.
 
+# A Tiny-sized map has 120x120 tiles.
 # A Giant-sized map has 240x240 tiles (although there are a few maps
 # that are hard-coded to be 255x255, thanks ES).
 
 # Unit angles are given in radians (as a 32-bit float).
-# For an approximation, 0.0 is facing Northeast, and the radian values
-# increase clockwise.
+# 0.0 is facing Northeast, and the radian values increase clockwise.
 
 
 import argparse
@@ -34,6 +34,7 @@ from AoE2ScenarioParser.pieces.structs.variable_change import VariableChangeStru
 from AoE2ScenarioParser.datasets import conditions, effects
 import fight
 import util_triggers
+import util_units
 
 
 # Relative path to the template scenario file.
@@ -113,8 +114,7 @@ class VarValComp(Enum):
 class ScnData:
     """An instance represents data to mutate while processing a scenario."""
 
-    # TODO how mutually to activate/deactivate triggers?
-    # Should I keep a map from trigger name to trigger id?
+    # TODO I'll need to find the scenario's next unit id for copying units
 
     @staticmethod
     def from_file(file_path):
@@ -463,11 +463,19 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
     scn_data = ScnData.from_file(scenario_template)
     units_scn = AoE2Scenario(unit_template)
     fight_data_list = fight.load_fight_data()
-    fight.validate_fights(units_scn, fight_data_list)
+    # fight.validate_fights(units_scn, fight_data_list)
+    fights = fight.make_fights(units_scn, fight_data_list)
+    # TODO include fights in scn data?
+    # pass the scenario object and the fights list as input?
+    # Or pass both the units scn and the fights as input?
+
     # add in minigames
-    # events = []
+
     scn_data.setup_scenario()
     scn_data.write_to_file(output)
+    for f in fights:
+        print('Values:')
+        print(f.objectives_description())
 
 
 def call_build_scenario(args):
@@ -504,20 +512,44 @@ def scratch(args): # pylint: disable=unused-argument
     Runs a simple test experiment.
     """
     scratch_path = 'scratch.aoe2scenario'
-    print(scratch_path)
-    # TODO test naming variables
-    # scn = AoE2Scenario(scratch_path)
-    # trigger_mgr = scn.object_manager.get_trigger_object()
-    # print(trigger_mgr.get_trigger_as_string(trigger_id=0))
-    # output_path = 'scratch.aoe2scenario'
-    # units_scenario_in = AoE2Scenario(UNIT_TEMPLATE)
-    # units_scenario_out = AoE2Scenario(UNIT_TEMPLATE)
-    # triggers_out = util_triggers.TriggerUtil(units_scenario_out)
+    units_scn = AoE2Scenario(UNIT_TEMPLATE)
 
-    # p1_template_units_in = get_units_array(units_scenario_in, 1)
-    # p1_template_units_out = get_units_array(units_scenario_out, 1)
-    # for unit in units_in_area(p1_template_units_out, 20.0, 0.0, 40.0, 20.0):
-    #     pass
+    p1_units = util_units.get_units_array(units_scn, 1)
+    sq1_units = util_units.units_in_area(p1_units, 20.0, 0.0, 40.0, 20.0)
+    for unit in sq1_units:
+        name = util_units.get_name(unit)
+        x = util_units.get_x(unit)
+        y = util_units.get_y(unit)
+        print(f'{name} ({x}, {y})')
+    avg1 = util_units.avg_pos(sq1_units)
+    print(f'sq1 average: {avg1}')
+
+    sq2_units = util_units.units_in_area(p1_units, 40.0, 0.0, 60.0, 20.0)
+    for unit in sq2_units:
+        name = util_units.get_name(unit)
+        x = util_units.get_x(unit)
+        y = util_units.get_y(unit)
+        print(f'{name} ({x}, {y})')
+    avg2 = util_units.avg_pos(sq2_units)
+    print(f'sq2 average: {avg2}')
+
+    trigger_mgr = units_scn.object_manager.get_trigger_object()
+    teleport_trigger = trigger_mgr.add_trigger('teleport')
+    center = (60.0, 60.0)
+    for unit in sq1_units:
+        new_pos = util_units.center_pos(unit, avg1, center, 5)
+        util_triggers.add_effect_teleport(
+            teleport_trigger, util_units.get_id(unit),
+            new_pos[0], new_pos[1], 1)
+
+    for unit in sq2_units:
+        util_units.flip_facing_h(unit)
+        new_pos = util_units.center_pos_flipped(unit, avg2, center, 5)
+        util_triggers.add_effect_teleport(
+            teleport_trigger, util_units.get_id(unit),
+            new_pos[0], new_pos[1], 1)
+    units_scn.write_to_file(scratch_path)
+
     # for unit, copy in zip(p1_template_units_in, p1_template_units_out):
         # unit_facing_flip_h(unit)
         # unit_set_x(unit, 239.5)

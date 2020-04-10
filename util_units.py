@@ -141,6 +141,53 @@ def flip_facing_h(unit: UnitStruct) -> None:
 
 def get_name(unit: UnitStruct) -> str:
     """Returns the string name of the unit (e.g. Militia, Archer)."""
-    # TODO test
     unit_constant = unit.retrievers[4].data
     return UNIT_IDS.inverse[unit_constant]
+
+
+def avg_pos(unit_list: List[UnitStruct]) -> Tuple[float, float]:
+    """
+    Returns the average position of all units in unit_list.
+
+    Raises a ValueError if unit_list is empty.
+    """
+    if not unit_list:
+        raise ValueError(f'unit_list is empty.')
+    n = len(unit_list)
+    return (sum(get_x(unit) for unit in unit_list) / n,
+            sum(get_y(unit) for unit in unit_list) / n)
+
+
+def center_pos(unit: UnitStruct, avg: Tuple[float, float],
+               center: Tuple[float, float], offset: int) -> Tuple[int, int]:
+    """
+    Returns the position of unit relative to the center, moved up by
+    offset tiles, with the unit in a group of units with
+    average position avg.
+    """
+    # Centers at (0, 0),
+    # then centers at the new center,
+    # then applies the offset.
+    x = get_x(unit) - avg[0] + center[0] + offset
+    y = get_y(unit) - avg[1] + center[1] - offset
+    return (int(x), int(y))
+
+
+def center_pos_flipped(unit: UnitStruct, avg: Tuple[float, float],
+                       center: Tuple[float, float],
+                       offset: int) -> Tuple[int, int]:
+    """
+    Returns the position of the unit relative to the center, moved down
+    by offset tiles, with the unit in a group of units with average
+    position avg. Performs a reflection about the horizontal axis of
+    the unit's position relative to the group's average position.
+    """
+    # Translates to the origin.
+    x = get_x(unit) - avg[0]
+    y = get_y(unit) - avg[1]
+    # Flips position across the horizontal axis.
+    x, y = y, x
+    # Translate to the next center and applies the offset.
+    x += center[0] - offset
+    y += center[1] + offset
+    return (int(x), int(y))

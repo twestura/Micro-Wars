@@ -42,3 +42,18 @@ def add_effect_delcare_victory(trigger: TriggerObject, player: int) -> None:
     """Adds to trigger an effect to Declare Victory to the player."""
     declare_victory = trigger.add_effect(effects.declare_victory)
     declare_victory.player_source = player
+
+
+def add_effect_teleport(trigger: TriggerObject, unit_id: int,
+                        x: int, y: int, player: int) -> None:
+    """
+    Adds to trigger an effect to teleport the unit specificed by unit_id
+    to the tile (x, y). The unit must belong to the player given by
+    the int player.
+    """
+    teleport = trigger.add_effect(effects.teleport_object)
+    teleport.number_of_units_selected = 1
+    teleport.player_source = player
+    teleport.selected_object_id = unit_id
+    teleport.location_x = x
+    teleport.location_y = y
