@@ -119,6 +119,11 @@ FIGHT_OFFSET = 6
 TIEBREAKER_INIT_NAME = '[T] Initialize Tiebreaker'
 
 
+# The trigger name for the trigger that begins checking which player
+# has won when there is no tie.
+CHECK_WINNER_NAME = '[V] Check Winner'
+
+
 class ChangeVarOp(Enum):
     """Represents the value for the operation of a Change Variable Effect."""
     set_op = 1
@@ -139,8 +144,6 @@ class VarValComp(Enum):
 
 class ScnData:
     """An instance represents data to mutate while processing a scenario."""
-
-    # TODO I'll need to find the scenario's next unit id for copying units
 
     def __init__(self, scn: AoE2Scenario, fights: List[Fight]):
         """Initializes a new ScnData object for the scenario scn."""
@@ -411,6 +414,72 @@ class ScnData:
         """
         self._add_trigger_header('Victory')
 
+        rounds_completed_name = '[V] Rounds Completed'
+        check_tie_name = '[V] Check Tie'
+        check_not_tie_name = '[V] Check Not Tie'
+        check_p1_winner_name = '[V] Check Player 1 Winner'
+        check_p2_winner_name = '[V] Check Player 2 Winner'
+
+        rounds_completed = self._add_trigger(rounds_completed_name)
+        counter = rounds_completed.add_condition(conditions.variable_value)
+        # Adds 1 to the number of rounds to adjust for the tiebreaker.
+        counter.amount_or_quantity = self.num_rounds + 1
+        counter.variable = self._var_ids['round']
+        counter.comparison = VarValComp.equal.value
+        self._add_activate(rounds_completed_name, check_tie_name)
+        self._add_activate(rounds_completed_name, check_not_tie_name)
+
+        check_tie = self._add_trigger(check_tie_name)
+        check_tie.enabled = False
+        diff0 = check_tie.add_condition(conditions.variable_value)
+        diff0.amount_or_quantity = 0
+        diff0.variable = self._var_ids['score-difference']
+        diff0.comparison = VarValComp.equal.value
+        self._add_deactivate(check_tie_name, check_not_tie_name)
+        self._add_activate(check_tie_name, TIEBREAKER_INIT_NAME)
+        # TODO the tiebreaker needs to activate check winner when it's over
+
+        check_not_tie = self._add_trigger(check_not_tie_name)
+        check_not_tie.enabled = False
+        diff_not_0 = check_not_tie.add_condition(conditions.variable_value)
+        diff_not_0.amount_or_quantity = 0
+        diff_not_0.variable = self._var_ids['score-difference']
+        diff_not_0.comparison = VarValComp.equal.value
+        diff_not_0.inverted = True
+        self._add_deactivate(check_not_tie_name, check_tie_name)
+        self._add_activate(check_not_tie_name, CHECK_WINNER_NAME)
+
+        check_winner = self._add_trigger(CHECK_WINNER_NAME)
+        check_winner.enabled = False
+        self._add_activate(CHECK_WINNER_NAME, check_p1_winner_name)
+        self._add_activate(CHECK_WINNER_NAME, check_p2_winner_name)
+
+        check_p1_winner = self._add_trigger(check_p1_winner_name)
+        check_p1_winner.enabled = False
+        diff_pos = check_p1_winner.add_condition(conditions.variable_value)
+        diff_pos.amount_or_quantity = 0
+        diff_pos.variable = self._var_ids['score-difference']
+        diff_pos.comparison = VarValComp.larger.value
+        self._add_deactivate(check_p1_winner_name, check_p2_winner_name)
+        set_p1_win = check_p1_winner.add_effect(effects.change_variable)
+        set_p1_win.quantity = 1
+        set_p1_win.operation = ChangeVarOp.set_op.value
+        set_p1_win.from_variable = self._var_ids['p1-wins']
+        set_p1_win.message = 'p1-wins'
+
+        check_p2_winner = self._add_trigger(check_p2_winner_name)
+        check_p2_winner.enabled = False
+        diff_neg = check_p2_winner.add_condition(conditions.variable_value)
+        diff_neg.amount_or_quantity = 0
+        diff_neg.variable = self._var_ids['score-difference']
+        diff_neg.comparison = VarValComp.less.value
+        self._add_deactivate(check_p2_winner_name, check_p1_winner_name)
+        set_p2_win = check_p2_winner.add_effect(effects.change_variable)
+        set_p2_win.quantity = 1
+        set_p2_win.operation = ChangeVarOp.set_op.value
+        set_p2_win.from_variable = self._var_ids['p2-wins']
+        set_p2_win.message = 'p2-wins'
+
         is_victorious_p1 = self._add_trigger('[V] Player 1 is Victorious')
         cond_p1_wins = is_victorious_p1.add_condition(conditions.variable_value)
         cond_p1_wins.amount_or_quantity = 1
@@ -544,7 +613,7 @@ class ScnData:
         # Changes points (using the player number).
         unit_name = util_units.get_name(u)
         pts = self._fights[fight_index].points[unit_name]
-        prefix = '[R{fight_index}]' if fight_index else '[T]'
+        prefix = f'[R{fight_index}]' if fight_index else '[T]'
         pretty_name = util.pretty_print_name(unit_name)
         change_pts_name = f'{prefix} P{from_player} loses {pretty_name} ({uid})'
         change_pts = self._add_trigger(change_pts_name)
@@ -603,7 +672,6 @@ class ScnData:
             change_view.location_x = FIGHT_CENTER_X
             change_view.location_y = FIGHT_CENTER_Y
 
-
         begin = self._add_trigger(begin_name)
         begin.enabled = False
         util_triggers.add_cond_timer(begin, DELAY_ROUND_BEFORE)
@@ -616,7 +684,6 @@ class ScnData:
         self._add_deactivate(p2_wins_name, p1_wins_name)
         self._add_activate(p2_wins_name, cleanup_name)
         self._add_effect_p2_score(p2_wins, self._fights[index].p2_bonus)
-        # TODO debug asymmetrical bonuses
 
         cleanup = self._add_trigger(cleanup_name)
         cleanup.enabled = False
@@ -625,11 +692,16 @@ class ScnData:
         increment_round = self._add_trigger(increment_name)
         increment_round.enabled = False
         util_triggers.add_cond_timer(increment_round, DELAY_ROUND_AFTER)
-        change_round = increment_round.add_effect(effects.change_variable)
-        change_round.quantity = 1
-        change_round.operation = ChangeVarOp.add.value
-        change_round.from_variable = self._var_ids['round']
-        change_round.message = 'round'
+        if index:
+            change_round = increment_round.add_effect(effects.change_variable)
+            change_round.quantity = 1
+            change_round.operation = ChangeVarOp.add.value
+            change_round.from_variable = self._var_ids['round']
+            change_round.message = 'round'
+        else:
+            # The tiebreaker activates checking the winner, rather than
+            # changing the round.
+            self._add_activate(increment_name, CHECK_WINNER_NAME)
 
         for unit in f.p1_units:
             self._add_unit(index, unit, 1, init, begin, p1_wins, p2_wins,

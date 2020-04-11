@@ -71,8 +71,8 @@ class FightData:
         for unit_name, point_value in self.points.items():
             if not util_units.is_unit(unit_name):
                 raise ValueError(f'{unit_name} is not a valid unit name.')
-            if point_value <= 0:
-                msg = f'{unit_name}: {point_value} must have a positive value.'
+            if point_value < 0:
+                msg = f'{unit_name}: {point_value} must be nonnegative.'
                 raise ValueError(msg)
 
     def __str__(self):
