@@ -115,6 +115,10 @@ FIGHT_CENTER_Y = 120
 FIGHT_OFFSET = 6
 
 
+# The trigger name for the init tiebreaker trigger.
+TIEBREAKER_INIT_NAME = '[T] Initialize Tiebreaker'
+
+
 class ChangeVarOp(Enum):
     """Represents the value for the operation of a Change Variable Effect."""
     set_op = 1
@@ -540,10 +544,9 @@ class ScnData:
         # Changes points (using the player number).
         unit_name = util_units.get_name(u)
         pts = self._fights[fight_index].points[unit_name]
+        prefix = '[R{fight_index}]' if fight_index else '[T]'
         pretty_name = util.pretty_print_name(unit_name)
-        change_pts_name = (
-            f'[R{fight_index}] P{from_player} loses {pretty_name} ({uid})'
-        )
+        change_pts_name = f'{prefix} P{from_player} loses {pretty_name} ({uid})'
         change_pts = self._add_trigger(change_pts_name)
         unit_killed = change_pts.add_condition(conditions.destroy_object)
         unit_killed.unit_object = uid
@@ -559,9 +562,11 @@ class ScnData:
 
     def _add_fight(self, index: int, f: Fight) -> None:
         """Adds the fight with the given index."""
-        # TODO handle tiebreaker
         prefix = f'[R{index}]' if index else '[T]'
-        init_name = f'{prefix} Initialize Round'
+        if index:
+            init_name = f'{prefix} Initialize Round'
+        else:
+            init_name = TIEBREAKER_INIT_NAME
         begin_name = f'{prefix} Begin Round'
         p1_wins_name = f'{prefix} Player 1 Wins Round'
         p2_wins_name = f'{prefix} Player 2 Wins Round'
@@ -569,12 +574,15 @@ class ScnData:
         increment_name = f'{prefix} Increment Round'
 
         init = self._add_trigger(init_name)
-        init_var = init.add_condition(conditions.variable_value)
-        # If the index is 0, sets the tiebreaker to start after all rounds.
-        # TODO fix this
-        init_var.amount_or_quantity = index if index else self.num_rounds
-        init_var.variable = self._var_ids['round']
-        init_var.comparison = VarValComp.equal.value
+        if index:
+            init_var = init.add_condition(conditions.variable_value)
+            init_var.amount_or_quantity = index
+            init_var.variable = self._var_ids['round']
+            init_var.comparison = VarValComp.equal.value
+        else:
+            # Disables the tiebreaker. The tiebreak launches only when
+            # enabled manually.
+            init.enabled = False
         self._add_activate(init_name, begin_name)
 
         # TODO check technologies are researched correctly
@@ -608,7 +616,7 @@ class ScnData:
         self._add_deactivate(p2_wins_name, p1_wins_name)
         self._add_activate(p2_wins_name, cleanup_name)
         self._add_effect_p2_score(p2_wins, self._fights[index].p2_bonus)
-        # TODO award bonus for the winner
+        # TODO debug asymmetrical bonuses
 
         cleanup = self._add_trigger(cleanup_name)
         cleanup.enabled = False
@@ -680,7 +688,7 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
     # for k, f in enumerate(fights):
     #     print(f'Values {k}:')
     #     print(f.objectives_description())
-    #     print(f'p1 bonus: {f.p1_bonus}, p2 bonus: {f.p2_bonus}')
+        # print(f'p1 bonus: {f.p1_bonus}, p2 bonus: {f.p2_bonus}')
     #     print('P1 Units:')
     #     for unit in f.p1_units:
     #         name = util_units.get_name(unit)

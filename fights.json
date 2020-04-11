@@ -22,10 +22,10 @@
     {
         "techs": ["fletching"],
         "points": {
-            "scout_cavalry": 1,
-            "archer": 1,
-            "skirmisher": 1,
-            "spearman": 1
+            "scout_cavalry": 4,
+            "archer": 5,
+            "skirmisher": 4,
+            "spearman": 3
         }
     }
 ]

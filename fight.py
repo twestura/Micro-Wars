@@ -118,25 +118,25 @@ class Fight:
         if not self.p2_units:
             raise ValueError('Player 2 has no units.')
 
-        self._p1_bonus = MAX_POINTS
-        for unit in self.p1_units:
-            name = util_units.get_name(unit)
-            if name not in self.points:
-                raise ValueError(f'There is no point value for {name}.')
-            pts = self.points[name]
-            self._p1_bonus -= pts
-            if self._p1_bonus < 0:
-                msg = f"Player 1's units exceed the point limit {MAX_POINTS}."
-                raise ValueError(msg)
-
         self._p2_bonus = MAX_POINTS
-        for unit in self.p2_units:
+        for unit in self.p1_units:
             name = util_units.get_name(unit)
             if name not in self.points:
                 raise ValueError(f'There is no point value for {name}.')
             pts = self.points[name]
             self._p2_bonus -= pts
             if self._p2_bonus < 0:
+                msg = f"Player 1's units exceed the point limit {MAX_POINTS}."
+                raise ValueError(msg)
+
+        self._p1_bonus = MAX_POINTS
+        for unit in self.p2_units:
+            name = util_units.get_name(unit)
+            if name not in self.points:
+                raise ValueError(f'There is no point value for {name}.')
+            pts = self.points[name]
+            self._p1_bonus -= pts
+            if self._p1_bonus < 0:
                 msg = f"Player 2's units exceed the point limit {MAX_POINTS}."
                 raise ValueError(msg)
 
@@ -190,7 +190,6 @@ def make_fights(units_scn: AoE2Scenario, fds: List[FightData],
     p2_units_all = util_units.get_units_array(units_scn, 2)
 
     fights = []
-    print(f'len(fds): {len(fds)}')
     for index, fd in enumerate(fds):
         x1, y1 = get_start_tile(index)
         x2, y2 = x1 + TILE_WIDTH, y1 + TILE_WIDTH
