@@ -1,8 +1,8 @@
 [
     {
-        "techs": ["drill"],
+        "techs": ["husbandry", "mahouts"],
         "points": {
-            "bombard_cannon": 0
+            "elite_war_elephant": 0
         }
     },
     {

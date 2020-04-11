@@ -217,6 +217,7 @@ def make_fights(units_scn: AoE2Scenario, fds: List[FightData],
             util_units.center_units_flip(p1_units2, center, -offset)
             util_units.center_units_flip(p2_units2, center, offset)
             fights.append(Fight(fd, p1_units2, p2_units2))
+    # TODO check techs being researched multiple times
     return fights
 
 
