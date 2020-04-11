@@ -25,14 +25,18 @@ GNU General Public License v3.0: See the LICENSE file.
 
 
 import argparse
+import copy
 from collections import defaultdict
 from enum import Enum
-from typing import Dict, Set, Tuple
+from typing import Dict, List, Set, Tuple
 from bidict import bidict
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
+from AoE2ScenarioParser.objects.trigger_obj import TriggerObject
+from AoE2ScenarioParser.pieces.structs.unit import UnitStruct
 from AoE2ScenarioParser.pieces.structs.variable_change import VariableChangeStruct # pylint: disable=line-too-long
 from AoE2ScenarioParser.datasets import conditions, effects
 import fight
+from fight import Fight
 import util_triggers
 import util_units
 
@@ -85,6 +89,10 @@ DELAY_ROUND_BEFORE = 3
 DELAY_VICTORY = 10
 
 
+# The number of tiles along a border of the map.
+MAP_WIDTH = 240
+
+
 # X coordinate of the player's starting view.
 START_VIEW_X = 120
 
@@ -94,15 +102,15 @@ START_VIEW_Y = 119
 
 
 # The x coordinate of the location around which to center fights.
-FIGHT_CENTER_X = 120
+FIGHT_CENTER_X = 121
 
 
 # The y coordinate of the location around which to center fights.
-FIGHT_CENTER_Y = 119
+FIGHT_CENTER_Y = 120
 
 
 # The number of tiles from the center an army's average should start.
-FIGHT_OFFSET = 5
+FIGHT_OFFSET = 6
 
 
 class ChangeVarOp(Enum):
@@ -128,15 +136,10 @@ class ScnData:
 
     # TODO I'll need to find the scenario's next unit id for copying units
 
-    @staticmethod
-    def from_file(file_path):
-        """Returns a new ScnData object parsed from the file `file_path`."""
-        scn = AoE2Scenario(file_path)
-        return ScnData(scn)
-
-    def __init__(self, scn: AoE2Scenario):
+    def __init__(self, scn: AoE2Scenario, fights: List[Fight]):
         """Initializes a new ScnData object for the scenario scn."""
         self._scn = scn
+        self._fights = fights
 
         # Bidirectional map from a trigger's name to its index.
         self._trigger_ids = bidict()
@@ -149,6 +152,11 @@ class ScnData:
 
         # Maps the name of a trigger t to a set of triggers that t deactivates.
         self._deactivate_triggers: Dict[str, Set[str]] = defaultdict(set)
+
+    @property
+    def num_rounds(self):
+        """Returns the number of rounds, not including the tiebreaker."""
+        return len(self._fights) - 1
 
     def _add_activate_and_deactivate_effects(self):
         """
@@ -202,9 +210,7 @@ class ScnData:
         """
         self._name_variables()
         self._add_initial_triggers()
-
-        # TODO implement
-
+        self._setup_rounds()
         self._add_activate_and_deactivate_effects()
 
     def _add_trigger(self, name: str):
@@ -290,7 +296,6 @@ class ScnData:
         inc_round_count.from_variable = self._var_ids['round']
         inc_round_count.message = 'round'
 
-
     def _set_start_views(self) -> None:
         """
         Uses Change View Effects to set the player start views.
@@ -308,7 +313,6 @@ class ScnData:
             change_view.location_x = START_VIEW_X
             change_view.location_y = START_VIEW_Y
             change_view.scroll = False
-
 
     def _add_objectives(self) -> None:
         """
@@ -450,6 +454,101 @@ class ScnData:
         util_triggers.add_cond_timer(declare_victory_p2, DELAY_VICTORY)
         util_triggers.add_effect_delcare_victory(declare_victory_p2, 2)
 
+    def get_and_inc_id(self):
+        """Returns the next unit id and increments the unit id counter."""
+        data_header = self._scn.parsed_data['DataHeaderPiece']
+        unit_id = data_header.retrievers[0].data
+        data_header.retrievers[0].data += 1
+        return unit_id
+
+    def _copy_unit(self, unit: UnitStruct, player: int) -> UnitStruct:
+        """
+        Adds a copy of unit to the player's list of units.
+
+        Returns the unit that is added.
+        """
+        u = copy.deepcopy(unit)
+        unit_id = self.get_and_inc_id()
+        util_units.set_id(u, unit_id)
+        units = self._scn.parsed_data['UnitsPiece'].retrievers[4].data[player]
+        units.retrievers[0].data += 1
+        units.retrievers[1].data.append(u)
+        return u
+
+    def _add_unit(self, fight_index: int, unit: UnitStruct, from_player: int,
+                  init: TriggerObject, begin: TriggerObject) -> None:
+        """
+        Adds the unit from player `from_player` to the scenario.
+        `fight_index` is the index of the fight in which the unit
+        participates.
+        """
+        u = self._copy_unit(unit, 3)
+
+        # Hides the unit in the top corner.
+        util_units.set_x(u, MAP_WIDTH - 0.5)
+        util_units.set_y(u, 0.5)
+
+        teleport = init.add_effect(effects.teleport_object)
+        teleport.number_of_units_selected = 1
+        teleport.player_source = 3
+        teleport.selected_object_id = util_units.get_id(u)
+        teleport.location_x = util_units.get_x(unit)
+        teleport.location_y = util_units.get_y(unit)
+
+        # TODO map revealers
+
+        for player in (1, 2):
+            change_view = init.add_effect(effects.change_view)
+            change_view.player_source = player
+            change_view.location_x = FIGHT_CENTER_X
+            change_view.location_y = FIGHT_CENTER_Y
+
+        change_own = begin.add_effect(effects.change_ownership)
+        change_own.number_of_units_selected = 1
+        change_own.player_source = 3
+        change_own.player_target = from_player
+        change_own.selected_object_id = util_units.get_id(u)
+
+        # points (using the player number)
+        # cleanup (remove objects without awarding points)
+
+    def _add_fight(self, index: int, f: Fight) -> None:
+        """Adds the fight with the given index."""
+        # TODO handle tiebreaker
+        prefix = f'[R{index}]' if index else '[T]'
+        init_name = f'{prefix} Initialize Round'
+        begin_name = f'{prefix} Begin Round'
+
+        init = self._add_trigger(init_name)
+        init_var = init.add_condition(conditions.variable_value)
+        # If the index is 0, sets the tiebreaker to start after all rounds.
+        # TODO fix this
+        init_var.amount_or_quantity = index if index else self.num_rounds
+        init_var.variable = self._var_ids['round']
+        init_var.comparison = VarValComp.equal.value
+        self._add_activate(init_name, begin_name)
+        # TODO activate objective description
+
+        begin = self._add_trigger(begin_name)
+        begin.enabled = False
+        util_triggers.add_cond_timer(begin, DELAY_ROUND_BEFORE)
+
+        # TODO finish triggers
+
+        for unit in f.p1_units:
+            self._add_unit(index, unit, 1, init, begin)
+        for unit in f.p2_units:
+            self._add_unit(index, unit, 2, init, begin)
+
+    def _setup_rounds(self) -> None:
+        """
+        Copies the units from the fight data and adds triggers for each
+        round of units.
+        """
+        for index, f in enumerate(self._fights):
+            self._add_trigger_header(
+                f'Fight {index}' if index else 'Tiebreaker')
+            self._add_fight(index, f)
 
 
 # Utility functions for handling terrain.
@@ -472,43 +571,39 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
         unit_template: A template of unit formations to copy for fights.
         output: The output path to which the resulting scenario is written.
     """
-    scn_data = ScnData.from_file(scenario_template)
     units_scn = AoE2Scenario(unit_template)
     fight_data_list = fight.load_fight_data()
-    # fight.validate_fights(units_scn, fight_data_list)
     fights = fight.make_fights(units_scn, fight_data_list,
                                FIGHT_CENTER_X, FIGHT_CENTER_Y, FIGHT_OFFSET)
-    # TODO include fights in scn data?
-    # pass the scenario object and the fights list as input?
-    # Or pass both the units scn and the fights as input?
-
-    # add in minigames
-
+    scn = AoE2Scenario(scenario_template)
+    scn_data = ScnData(scn, fights)
+    # TODO add in minigames
     scn_data.setup_scenario()
     scn_data.write_to_file(output)
 
-    for k, f in enumerate(fights):
-        print(f'Values {k}:')
-        print(f.objectives_description())
-        print(f'p1 bonus: {f.p1_bonus}, p2 bonus: {f.p2_bonus}')
-        print('P1 Units:')
-        for unit in f.p1_units:
-            name = util_units.get_name(unit)
-            x = util_units.get_x(unit)
-            y = util_units.get_y(unit)
-            theta = util_units.get_facing(unit)
-            print(f'  {name} - ({x}, {y}) - facing {theta}')
-        print('P2 Units:')
-        for unit in f.p2_units:
-            name = util_units.get_name(unit)
-            x = util_units.get_x(unit)
-            y = util_units.get_y(unit)
-            theta = util_units.get_facing(unit)
-            print(f'  {name} - ({x}, {y}) - facing {theta}')
+    # for k, f in enumerate(fights):
+    #     print(f'Values {k}:')
+    #     print(f.objectives_description())
+    #     print(f'p1 bonus: {f.p1_bonus}, p2 bonus: {f.p2_bonus}')
+    #     print('P1 Units:')
+    #     for unit in f.p1_units:
+    #         name = util_units.get_name(unit)
+    #         x = util_units.get_x(unit)
+    #         y = util_units.get_y(unit)
+    #         theta = util_units.get_facing(unit)
+    #         print(f'  {name} - ({x}, {y}) - facing {theta}')
+    #     print('P2 Units:')
+    #     for unit in f.p2_units:
+    #         name = util_units.get_name(unit)
+    #         x = util_units.get_x(unit)
+    #         y = util_units.get_y(unit)
+    #         theta = util_units.get_facing(unit)
+    #         print(f'  {name} - ({x}, {y}) - facing {theta}')
 
 
 def call_build_scenario(args):
     """Unpacks arguments from command line args and builds the scenario."""
+    # TODO support different event data
     scenario_map = args.map[0]
     units_scn = args.units[0]
     out = args.output[0]

@@ -113,6 +113,17 @@ def get_id(unit: UnitStruct) -> int:
     return unit.retrievers[3].data
 
 
+def set_id(unit: UnitStruct, unit_id: int) -> None:
+    """
+    Sets the unit's id number to unit_id.
+
+    Raises a ValueError if unit_id is negative.
+    """
+    if unit_id < 0:
+        raise ValueError(f'unit id {unit_id} may not be negative.')
+    unit.retrievers[3].data = unit_id
+
+
 def get_facing(unit: UnitStruct) -> float:
     """Returns the angle (in radians) giving the unit's facing direction."""
     return unit.retrievers[6].data
