@@ -36,7 +36,11 @@ def get_units_array(scenario: AoE2Scenario, player: int) -> List[UnitStruct]:
         msg = f'Player number {player} is not between 1 and 8 (inclusive).'
         raise ValueError(msg)
     player_units = scenario.parsed_data['UnitsPiece'].retrievers[4].data[player]
-    return player_units.retrievers[1].data
+    unit_array = player_units.retrievers[1].data
+    # Ensures the returned object is a list, even if there is only one unit.
+    if not isinstance(player_units.retrievers[1].data, list):
+        unit_array = [unit_array]
+    return unit_array
 
 
 def units_in_area(unit_array: List[UnitStruct],

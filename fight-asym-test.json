@@ -1,0 +1,15 @@
+[
+    {
+        "techs": ["drill"],
+        "points": {
+            "bombard_cannon": 20
+        }
+    },
+    {
+        "techs": [],
+        "points": {
+            "scout_cavalry": 40,
+            "militia": 20
+        }
+    }
+]

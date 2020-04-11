@@ -544,16 +544,17 @@ class ScnData:
         change_pts_name = (
             f'[R{fight_index}] P{from_player} loses {pretty_name} ({uid})'
         )
-        self._add_deactivate(cleanup.name.rstrip('\x00'), change_pts_name)
         change_pts = self._add_trigger(change_pts_name)
         unit_killed = change_pts.add_condition(conditions.destroy_object)
         unit_killed.unit_object = uid
         if from_player == 1:
             self._add_effect_p2_score(change_pts, pts)
             util_triggers.add_cond_destroy_obj(p2_wins, uid)
+            self._add_deactivate(p1_wins.name.rstrip('\x00'), change_pts_name)
         else:
             self._add_effect_p1_score(change_pts, pts)
             util_triggers.add_cond_destroy_obj(p1_wins, uid)
+            self._add_deactivate(p2_wins.name.rstrip('\x00'), change_pts_name)
         util_triggers.add_effect_remove_obj(cleanup, uid, from_player)
 
     def _add_fight(self, index: int, f: Fight) -> None:
@@ -602,9 +603,12 @@ class ScnData:
         p1_wins = self._add_trigger(p1_wins_name)
         self._add_deactivate(p1_wins_name, p2_wins_name)
         self._add_activate(p1_wins_name, cleanup_name)
+        self._add_effect_p1_score(p1_wins, self._fights[index].p1_bonus)
         p2_wins = self._add_trigger(p2_wins_name)
         self._add_deactivate(p2_wins_name, p1_wins_name)
         self._add_activate(p2_wins_name, cleanup_name)
+        self._add_effect_p2_score(p2_wins, self._fights[index].p2_bonus)
+        # TODO award bonus for the winner
 
         cleanup = self._add_trigger(cleanup_name)
         cleanup.enabled = False
@@ -636,7 +640,9 @@ class ScnData:
             self._add_trigger_header(
                 f'Fight {index}' if index else 'Tiebreaker')
             self._add_fight(index, f)
-        # TODO "asymmetrical fights" aren't working, but symmetrical ones are!
+        # TODO "asymmetrical fights" aren't working
+        # TODO deleting all units doesn't grant score (last kill likely
+        # is cancelled)
 
 
 # Utility functions for handling terrain.
@@ -648,7 +654,9 @@ def map_dimensions(scenario: AoE2Scenario) -> Tuple[int, int]:
 
 
 def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
-                   unit_template: str = UNIT_TEMPLATE, output: str = OUTPUT):
+                   unit_template: str = UNIT_TEMPLATE,
+                   fight_json: str = fight.DEFAULT_FILE,
+                   output: str = OUTPUT):
     """
     Builds the scenario.
 
@@ -660,7 +668,7 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
         output: The output path to which the resulting scenario is written.
     """
     units_scn = AoE2Scenario(unit_template)
-    fight_data_list = fight.load_fight_data()
+    fight_data_list = fight.load_fight_data(fight_json)
     fights = fight.make_fights(units_scn, fight_data_list,
                                FIGHT_CENTER_X, FIGHT_CENTER_Y, FIGHT_OFFSET)
     scn = AoE2Scenario(scenario_template)
@@ -691,9 +699,9 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
 
 def call_build_scenario(args):
     """Unpacks arguments from command line args and builds the scenario."""
-    # TODO support different event data
     scenario_map = args.map[0]
     units_scn = args.units[0]
+    event_json = args.events[0]
     out = args.output[0]
 
     # Checks the output path is different from all input paths.
@@ -702,13 +710,15 @@ def call_build_scenario(args):
         matches.append('map')
     if out == units_scn:
         matches.append('units')
+    if out == event_json:
+        matches.append('events')
     if matches:
         conflicts = ', '.join(matches)
         msg = f"The output path '{out}' conflicts with: {conflicts}."
         raise ValueError(msg)
 
     build_scenario(scenario_template=scenario_map, unit_template=units_scn,
-                   output=out)
+                   fight_json=event_json, output=out)
 
 
 def build_publish_files(args):
@@ -720,9 +730,7 @@ def build_publish_files(args):
 
 
 def scratch(args): # pylint: disable=unused-argument
-    """
-    Runs a simple test experiment.
-    """
+    """Runs a simple test experiment."""
     scratch_path = 'scratch.aoe2scenario'
     units_scn = AoE2Scenario(UNIT_TEMPLATE)
 
@@ -788,6 +796,8 @@ def main():
                               help='Filepath to the map template input file.')
     parser_build.add_argument('--units', nargs=1, default=[UNIT_TEMPLATE],
                               help='Filepath to the unit template input file.')
+    parser_build.add_argument('--events', nargs=1, default=[fight.DEFAULT_FILE],
+                              help='Filepath to the event json file.')
     parser_build.add_argument('--output', '-o', nargs=1, default=[OUTPUT],
                               help='Filepath to which the output is written, must differ from all input files.') #pylint: disable=line-too-long
     parser_build.set_defaults(func=call_build_scenario)
