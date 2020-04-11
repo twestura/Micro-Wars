@@ -27,5 +27,12 @@
             "skirmisher": 4,
             "spearman": 3
         }
+    },
+    {
+        "techs": ["castle_age", "bodkin_arrow"],
+        "points": {
+            "mangonel": 25,
+            "crossbowman": 2
+        }
     }
 ]
