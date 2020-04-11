@@ -9,6 +9,14 @@ from AoE2ScenarioParser.datasets import conditions, effects
 from AoE2ScenarioParser.objects.trigger_obj import TriggerObject
 
 
+def add_cond_destroy_obj(trigger: TriggerObject, unit_id: int) -> None:
+    """
+    Adds a condition to trigger that the unit with id unit_id is destroyed.
+    """
+    destroy_obj = trigger.add_condition(conditions.destroy_object)
+    destroy_obj.unit_object = unit_id
+
+
 def add_cond_gaia_defeated(trigger: TriggerObject) -> None:
     """
     Adds a condition to trigger that the gaia player is defeated.
@@ -42,6 +50,31 @@ def add_effect_delcare_victory(trigger: TriggerObject, player: int) -> None:
     """Adds to trigger an effect to Declare Victory to the player."""
     declare_victory = trigger.add_effect(effects.declare_victory)
     declare_victory.player_source = player
+
+
+def add_effect_remove_obj(trigger: TriggerObject, unit_id: int,
+                          player: int) -> None:
+    """
+    Adds to trigger an effect to remove the unit with it unit_id.
+    The number of the player who owns the unit is given by player.
+    """
+    remove_obj = trigger.add_effect(effects.remove_object)
+    remove_obj.number_of_units_selected = 1
+    remove_obj.player_source = player
+    remove_obj.selected_object_id = unit_id
+
+
+def add_effect_research_tech(trigger: TriggerObject, tech_id: int,
+                             player: int) -> None:
+    """
+    Adds to trigger an effect to research the technology given by tech_id
+    for the indicated player.
+    """
+    res_tech = trigger.add_effect(effects.research_technology)
+    res_tech.player_source = player
+    res_tech.technology = tech_id
+    # TODO find out what force research technology does
+    res_tech.force_research_technology = True
 
 
 def add_effect_teleport(trigger: TriggerObject, unit_id: int,

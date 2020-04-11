@@ -37,6 +37,8 @@ from AoE2ScenarioParser.pieces.structs.variable_change import VariableChangeStru
 from AoE2ScenarioParser.datasets import conditions, effects
 import fight
 from fight import Fight
+import util
+import util_techs
 import util_triggers
 import util_units
 
@@ -475,14 +477,48 @@ class ScnData:
         units.retrievers[1].data.append(u)
         return u
 
+    def _add_effect_p1_score(self, trigger: TriggerObject,
+                             pts: int) -> None:
+        """Adds effects to trigger that change p1's score by pts."""
+        p1_plus = trigger.add_effect(effects.change_variable)
+        p1_plus.quantity = pts
+        p1_plus.operation = ChangeVarOp.add.value
+        p1_plus.from_variable = self._var_ids['p1-score']
+        p1_plus.message = 'p1-score'
+        diff_plus = trigger.add_effect(effects.change_variable)
+        diff_plus.quantity = pts
+        diff_plus.operation = ChangeVarOp.add.value
+        diff_plus.from_variable = self._var_ids['score-difference']
+        diff_plus.message = 'score-difference'
+
+    def _add_effect_p2_score(self, trigger: TriggerObject,
+                             pts: int) -> None:
+        """Adds effects to trigger that change p2's score by pts."""
+        p2_plus = trigger.add_effect(effects.change_variable)
+        p2_plus.quantity = pts
+        p2_plus.operation = ChangeVarOp.add.value
+        p2_plus.from_variable = self._var_ids['p2-score']
+        p2_plus.message = 'p2-score'
+        diff_subtract = trigger.add_effect(effects.change_variable)
+        diff_subtract.quantity = pts
+        diff_subtract.operation = ChangeVarOp.subtract.value
+        diff_subtract.from_variable = self._var_ids['score-difference']
+        diff_subtract.message = 'score-difference'
+
     def _add_unit(self, fight_index: int, unit: UnitStruct, from_player: int,
-                  init: TriggerObject, begin: TriggerObject) -> None:
+                  init: TriggerObject, begin: TriggerObject,
+                  p1_wins: TriggerObject, p2_wins: TriggerObject,
+                  cleanup: TriggerObject) -> None:
         """
         Adds the unit from player `from_player` to the scenario.
         `fight_index` is the index of the fight in which the unit
         participates.
+        Checks from_player is 1 or 2.
         """
+        assert from_player in (1, 2)
+
         u = self._copy_unit(unit, 3)
+        uid = util_units.get_id(u)
 
         # Hides the unit in the top corner.
         util_units.set_x(u, MAP_WIDTH - 0.5)
@@ -491,26 +527,34 @@ class ScnData:
         teleport = init.add_effect(effects.teleport_object)
         teleport.number_of_units_selected = 1
         teleport.player_source = 3
-        teleport.selected_object_id = util_units.get_id(u)
+        teleport.selected_object_id = uid
         teleport.location_x = util_units.get_x(unit)
         teleport.location_y = util_units.get_y(unit)
-
-        # TODO map revealers
-
-        for player in (1, 2):
-            change_view = init.add_effect(effects.change_view)
-            change_view.player_source = player
-            change_view.location_x = FIGHT_CENTER_X
-            change_view.location_y = FIGHT_CENTER_Y
 
         change_own = begin.add_effect(effects.change_ownership)
         change_own.number_of_units_selected = 1
         change_own.player_source = 3
         change_own.player_target = from_player
-        change_own.selected_object_id = util_units.get_id(u)
+        change_own.selected_object_id = uid
 
-        # points (using the player number)
-        # cleanup (remove objects without awarding points)
+        # Changes points (using the player number).
+        unit_name = util_units.get_name(u)
+        pts = self._fights[fight_index].points[unit_name]
+        pretty_name = util.pretty_print_name(unit_name)
+        change_pts_name = (
+            f'[R{fight_index}] P{from_player} loses {pretty_name} ({uid})'
+        )
+        self._add_deactivate(cleanup.name.rstrip('\x00'), change_pts_name)
+        change_pts = self._add_trigger(change_pts_name)
+        unit_killed = change_pts.add_condition(conditions.destroy_object)
+        unit_killed.unit_object = uid
+        if from_player == 1:
+            self._add_effect_p2_score(change_pts, pts)
+            util_triggers.add_cond_destroy_obj(p2_wins, uid)
+        else:
+            self._add_effect_p1_score(change_pts, pts)
+            util_triggers.add_cond_destroy_obj(p1_wins, uid)
+        util_triggers.add_effect_remove_obj(cleanup, uid, from_player)
 
     def _add_fight(self, index: int, f: Fight) -> None:
         """Adds the fight with the given index."""
@@ -518,6 +562,10 @@ class ScnData:
         prefix = f'[R{index}]' if index else '[T]'
         init_name = f'{prefix} Initialize Round'
         begin_name = f'{prefix} Begin Round'
+        p1_wins_name = f'{prefix} Player 1 Wins Round'
+        p2_wins_name = f'{prefix} Player 2 Wins Round'
+        cleanup_name = f'{prefix} Cleanup Round'
+        increment_name = f'{prefix} Increment Round'
 
         init = self._add_trigger(init_name)
         init_var = init.add_condition(conditions.variable_value)
@@ -527,28 +575,68 @@ class ScnData:
         init_var.variable = self._var_ids['round']
         init_var.comparison = VarValComp.equal.value
         self._add_activate(init_name, begin_name)
+
+        # TODO check technologies are researched correctly
+        # TODO what if a technology is researched multiple times?
+        # Should this situation be prevented?
+        for player in (1, 2, 3):
+            for tech_name in f.techs:
+                tech_id = util_techs.TECH_IDS[tech_name]
+                util_triggers.add_effect_research_tech(init, tech_id, player)
+
         # TODO activate objective description
+
+        # TODO map revealers
+
+        for player in (1, 2):
+            change_view = init.add_effect(effects.change_view)
+            change_view.player_source = player
+            change_view.location_x = FIGHT_CENTER_X
+            change_view.location_y = FIGHT_CENTER_Y
+
 
         begin = self._add_trigger(begin_name)
         begin.enabled = False
         util_triggers.add_cond_timer(begin, DELAY_ROUND_BEFORE)
 
-        # TODO finish triggers
+        p1_wins = self._add_trigger(p1_wins_name)
+        self._add_deactivate(p1_wins_name, p2_wins_name)
+        self._add_activate(p1_wins_name, cleanup_name)
+        p2_wins = self._add_trigger(p2_wins_name)
+        self._add_deactivate(p2_wins_name, p1_wins_name)
+        self._add_activate(p2_wins_name, cleanup_name)
+
+        cleanup = self._add_trigger(cleanup_name)
+        cleanup.enabled = False
+        self._add_activate(cleanup_name, increment_name)
+
+        increment_round = self._add_trigger(increment_name)
+        increment_round.enabled = False
+        util_triggers.add_cond_timer(increment_round, DELAY_ROUND_AFTER)
+        change_round = increment_round.add_effect(effects.change_variable)
+        change_round.quantity = 1
+        change_round.operation = ChangeVarOp.add.value
+        change_round.from_variable = self._var_ids['round']
+        change_round.message = 'round'
 
         for unit in f.p1_units:
-            self._add_unit(index, unit, 1, init, begin)
+            self._add_unit(index, unit, 1, init, begin, p1_wins, p2_wins,
+                           cleanup)
         for unit in f.p2_units:
-            self._add_unit(index, unit, 2, init, begin)
+            self._add_unit(index, unit, 2, init, begin, p1_wins, p2_wins,
+                           cleanup)
 
     def _setup_rounds(self) -> None:
         """
         Copies the units from the fight data and adds triggers for each
         round of units.
         """
+        # TODO handle tiebreaker and final round.
         for index, f in enumerate(self._fights):
             self._add_trigger_header(
                 f'Fight {index}' if index else 'Tiebreaker')
             self._add_fight(index, f)
+        # TODO "asymmetrical fights" aren't working, but symmetrical ones are!
 
 
 # Utility functions for handling terrain.
