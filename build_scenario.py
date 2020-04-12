@@ -124,6 +124,14 @@ TIEBREAKER_INIT_NAME = '[T] Initialize Tiebreaker'
 CHECK_WINNER_NAME = '[V] Check Winner'
 
 
+# Name of the round counter trigger displayed in the menu and on screen.
+ROUND_OBJ_NAME = '[O] Round Objective'
+
+
+# Name of the tiebreaker header objective displayed in the menu and on screen.
+TIEBREAKER_OBJ_NAME = '[O] Tiebreaker'
+
+
 class ChangeVarOp(Enum):
     """Represents the value for the operation of a Change Variable Effect."""
     set_op = 1
@@ -161,6 +169,10 @@ class ScnData:
 
         # Maps the name of a trigger t to a set of triggers that t deactivates.
         self._deactivate_triggers: Dict[str, Set[str]] = defaultdict(set)
+
+        # self._round_objective[k] is the name of the trigger to activate to
+        # display the objectives for round k.
+        self._round_objective: List[str] = [None] * len(self._fights)
 
     @property
     def num_rounds(self):
@@ -405,7 +417,45 @@ class ScnData:
         disp_p2_wins_cond.variable = self._var_ids['p2-wins']
         disp_p2_wins_cond.comparison = VarValComp.equal.value
 
-        # TODO add objectives for individual rounds
+        round_text = f'Round <round> / {self.num_rounds}:'
+        round_obj = self._add_trigger(ROUND_OBJ_NAME)
+        round_obj.header = True
+        round_obj.enabled = False
+        round_obj.display_as_objective = True
+        round_obj.display_on_screen = True
+        round_obj.description_order = 75
+        round_obj.short_description = round_text
+        round_obj.description = round_text
+        round_obj.mute_objectives = True
+        util_triggers.add_cond_gaia_defeated(round_obj)
+
+        tiebreaker_text = 'Tiebreaker'
+        tiebreaker_obj = self._add_trigger(TIEBREAKER_OBJ_NAME)
+        tiebreaker_obj.header = True
+        tiebreaker_obj.enabled = False
+        tiebreaker_obj.display_as_objective = True
+        tiebreaker_obj.display_on_screen = True
+        tiebreaker_obj.description_order = 75
+        tiebreaker_obj.short_description = tiebreaker_text
+        tiebreaker_obj.description = tiebreaker_text
+        tiebreaker_obj.mute_objectives = True
+        util_triggers.add_cond_gaia_defeated(tiebreaker_obj)
+
+        # TODO activate and deactivate objectives in init and cleanup
+        for f_index, f in enumerate(self._fights):
+            if f_index != 0:
+                fight_obj_text = f.objectives_description()
+                fight_obj_name = f'[O] Round {f_index} Objective'
+                self._round_objective[f_index] = fight_obj_name
+                fight_obj = self._add_trigger(fight_obj_name)
+                fight_obj.enabled = False
+                fight_obj.display_as_objective = True
+                fight_obj.display_on_screen = True
+                fight_obj.description_order = 50
+                fight_obj.short_description = fight_obj_text
+                fight_obj.description = fight_obj_text
+                fight_obj.mute_objectives = True
+                util_triggers.add_cond_gaia_defeated(fight_obj)
 
     def _add_victory_conditions(self):
         """
@@ -648,21 +698,21 @@ class ScnData:
             init_var.amount_or_quantity = index
             init_var.variable = self._var_ids['round']
             init_var.comparison = VarValComp.equal.value
+            if index == 1:
+                self._add_activate(init_name, ROUND_OBJ_NAME)
+            self._add_activate(init_name, self._round_objective[index])
         else:
             # Disables the tiebreaker. The tiebreak launches only when
             # enabled manually.
             init.enabled = False
+            self._add_activate(init_name, TIEBREAKER_OBJ_NAME)
         self._add_activate(init_name, begin_name)
 
-        # TODO check technologies are researched correctly
-        # TODO what if a technology is researched multiple times?
-        # Should this situation be prevented?
+
         for player in (1, 2, 3):
             for tech_name in f.techs:
                 tech_id = util_techs.TECH_IDS[tech_name]
                 util_triggers.add_effect_research_tech(init, tech_id, player)
-
-        # TODO activate objective description
 
         # TODO map revealers
 
@@ -688,6 +738,8 @@ class ScnData:
         cleanup = self._add_trigger(cleanup_name)
         cleanup.enabled = False
         self._add_activate(cleanup_name, increment_name)
+        if index == self.num_rounds:
+            self._add_deactivate(cleanup_name, ROUND_OBJ_NAME)
 
         increment_round = self._add_trigger(increment_name)
         increment_round.enabled = False
@@ -698,9 +750,11 @@ class ScnData:
             change_round.operation = ChangeVarOp.add.value
             change_round.from_variable = self._var_ids['round']
             change_round.message = 'round'
+            self._add_deactivate(cleanup_name, self._round_objective[index])
         else:
             # The tiebreaker activates checking the winner, rather than
             # changing the round.
+            self._add_deactivate(increment_name, TIEBREAKER_OBJ_NAME)
             self._add_activate(increment_name, CHECK_WINNER_NAME)
 
         for unit in f.p1_units:
