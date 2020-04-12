@@ -5,6 +5,7 @@ GNU General Public License v3.0: See the LICENSE file.
 """
 
 
+import copy
 import math
 from typing import List, Tuple
 from bidict import bidict
@@ -12,18 +13,37 @@ from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
 from AoE2ScenarioParser.pieces.structs.unit import UnitStruct
 from AoE2ScenarioParser.datasets import units
 import util
+import util_scn
+
+
+# TODO incorporate library updates for managing units.
 
 
 # Bidirectional map between unit names and ids.
 UNIT_IDS = bidict()
-for u in units.__dict__:
-    if '__' not in u and 'get_unit_id_by_string' not in u:
-        UNIT_IDS[u] = units.get_unit_id_by_string(u)
+for _u in units.__dict__:
+    if '__' not in _u and 'get_unit_id_by_string' not in _u:
+        UNIT_IDS[_u] = units.get_unit_id_by_string(_u)
 
 
 def is_unit(unit_name: str) -> bool:
     """Returns True if unit_name is a valid unit name, False otherwise."""
     return unit_name in UNIT_IDS
+
+
+def copy_unit(scn: AoE2Scenario, unit: UnitStruct, player: int) -> UnitStruct:
+    """
+    Adds a copy of unit to the player's list of units in scenario scn.
+
+    Returns the unit that is added.
+    """
+    copied_unit = copy.deepcopy(unit)
+    unit_id = util_scn.get_and_inc_unit_id(scn)
+    set_id(copied_unit, unit_id)
+    unit_array = scn.parsed_data['UnitsPiece'].retrievers[4].data[player]
+    unit_array.retrievers[0].data += 1
+    unit_array.retrievers[1].data.append(copied_unit)
+    return copied_unit
 
 
 def get_units_array(scenario: AoE2Scenario, player: int) -> List[UnitStruct]:
@@ -61,14 +81,12 @@ def change_player(scenario: AoE2Scenario,
     unit_index is the original index of the unit to move in the units array
     of player i.
 
-    Raises a ValueError if i == j, if i and j are not valid players
-    in the scenario, or if unit_index is not a valid unit index.
+    Raises a ValueError if i == j.
     """
-    # There is a PlayerUnits struct that has the unit count and the
-    # array of units.
-    # TODO raise ValueError
     if i == j:
         raise ValueError(f'Player numbers must be different, both are {i}.')
+
+    # The a PlayerUnits struct has the unit count and the array of units.
     pi_units = scenario.parsed_data['UnitsPiece'].retrievers[4].data[i]
     pj_units = scenario.parsed_data['UnitsPiece'].retrievers[4].data[j]
 
@@ -94,13 +112,11 @@ def get_y(unit: UnitStruct) -> float:
 
 def set_x(unit: UnitStruct, x: float):
     """Sets the unit's x coordinate to x."""
-    # TODO handle out of bounds errors
     unit.retrievers[0].data = x
 
 
 def set_y(unit: UnitStruct, y: float):
     """Sets the unit's y coordinate to y."""
-    # TODO handle out of bounds errors
     unit.retrievers[1].data = y
 
 
@@ -173,6 +189,9 @@ def avg_pos(unit_list: List[UnitStruct]) -> Tuple[float, float]:
             sum(get_y(unit) for unit in unit_list) / n)
 
 
+# TODO rethink offsets so I don't need to negate them when creating the fights.
+
+
 def center_pos(unit: UnitStruct, avg: Tuple[float, float],
                center: Tuple[float, float], offset: int) -> Tuple[int, int]:
     """
@@ -180,8 +199,8 @@ def center_pos(unit: UnitStruct, avg: Tuple[float, float],
     offset tiles, with the unit in a group of units with
     average position avg.
     """
-    # Centers at (0, 0),
-    # then centers at the new center,
+    # Translates to the origin (0, 0),
+    # then translate to the new center,
     # then applies the offset.
     x = get_x(unit) - avg[0] + center[0] + offset
     y = get_y(unit) - avg[1] + center[1] - offset
@@ -197,15 +216,16 @@ def center_pos_flipped(unit: UnitStruct, avg: Tuple[float, float],
     position avg. Performs a reflection about the horizontal axis of
     the unit's position relative to the group's average position.
     """
-    # Translates to the origin.
+    # Translates to the origin (0, 0).
     x = get_x(unit) - avg[0]
     y = get_y(unit) - avg[1]
     # Flips position across the horizontal axis.
     x, y = y, x
-    # Translate to the next center and applies the offset.
+    # Translates to the center and applies the offset.
     x += center[0] - offset
     y += center[1] + offset
     return (int(x), int(y))
+
 
 def center_units(unit_array: List[UnitStruct], center: Tuple[float, float],
                  offset: int) -> None:

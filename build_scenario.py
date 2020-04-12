@@ -16,6 +16,11 @@ GNU General Public License v3.0: See the LICENSE file.
 # Object trigger accepts two integer coordinates and places the unit at the
 # left corner of the corresponding tile.
 
+# To move a unit one square to the North, add 1 to its x coordinate and
+# subtract 1 from its y coordinate. These assignments move the unit
+# one tile up and to the left, then one tile up and to the right,
+# cumulatively moving it one tile North.
+
 # A Tiny-sized map has 120x120 tiles.
 # A Giant-sized map has 240x240 tiles (although there are a few maps
 # that are hard-coded to be 255x255, thanks ES).
@@ -25,15 +30,16 @@ GNU General Public License v3.0: See the LICENSE file.
 
 
 import argparse
-import copy
 from collections import defaultdict
 from enum import Enum
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set
 from bidict import bidict
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
 from AoE2ScenarioParser.objects.trigger_obj import TriggerObject
 from AoE2ScenarioParser.pieces.structs.unit import UnitStruct
-from AoE2ScenarioParser.pieces.structs.variable_change import VariableChangeStruct # pylint: disable=line-too-long
+from AoE2ScenarioParser.pieces.structs.variable_change import (
+    VariableChangeStruct
+)
 from AoE2ScenarioParser.datasets import conditions, effects
 import fight
 from fight import Fight
@@ -168,7 +174,15 @@ class VarValComp(Enum):
 
 
 class ScnData:
-    """An instance represents data to mutate while processing a scenario."""
+    """
+    An instance represents data to mutate while processing a scenario.
+
+    The typical use case for creating a Micro Wars scenario is:
+    1. Perform file I/O to parse the template scenario and event files.
+    2. Pass the parsed data to the initializer to create a ScnData object.
+    3. Call the setup_scenario method.
+    4. Call the write_to_file method.
+    """
 
     def __init__(self, scn: AoE2Scenario, fights: List[Fight]):
         """Initializes a new ScnData object for the scenario scn."""
@@ -196,22 +210,48 @@ class ScnData:
         """Returns the number of rounds, not including the tiebreaker."""
         return len(self._fights) - 1
 
-    def _add_activate_and_deactivate_effects(self):
+    def setup_scenario(self):
         """
-        Adds all activate and deactivate triggers specified in the fields.
+        Modifies the internal scenario file to support the changes
+        for Micro Wars!
         """
-        trigger_mgr = self._scn.object_manager.get_trigger_object()
-        effect_mapping_and_function = [
-            (self._activate_triggers, util_triggers.add_effect_activate),
-            (self._deactivate_triggers, util_triggers.add_effect_deactivate)
-        ]
-        for mapping, add_effect in effect_mapping_and_function:
-            for source_name, target_names in mapping.items():
-                for target_name in target_names:
-                    source_id = self._trigger_ids[source_name]
-                    source = trigger_mgr.get_trigger(trigger_id=source_id)
-                    target_id = self._trigger_ids[target_name]
-                    add_effect(source, target_id)
+        self._name_variables()
+        self._add_initial_triggers()
+        self._setup_rounds()
+        self._add_activate_and_deactivate_effects()
+
+    def write_to_file(self, file_path):
+        """
+        Writes the current scn file to `file_path`.
+
+        Overwrites any file currently at that path.
+        """
+        self._scn.write_to_file(file_path)
+
+    def _add_trigger(self, name: str):
+        """
+        Adds a trigger named name to the scenario and trigger_ids bidict.
+        Raises a ValueError if a trigger with that name already exists.
+        Returns the created trigger object.
+        """
+        if name in self._trigger_ids:
+            raise ValueError(f'{name} is already the name of a trigger.')
+        self._trigger_ids[name] = len(self._trigger_ids)
+        return self._scn.object_manager.get_trigger_object().add_trigger(name)
+
+    def _add_trigger_header(self, name: str) -> None:
+        """
+        Appends a trigger section header with title `name`.
+
+        A header trigger serves no functional purpose, but allows
+        the trigger list to be broken up into sections so that
+        it is more human-readable in the editor.
+
+        Raises a ValueError if creating this trigger would create a
+        trigger with a duplicate name.
+        """
+        trigger_name = f'-- {name} --'
+        self._add_trigger(trigger_name)
 
     def _add_activate(self, name_source: str, name_target: str):
         """
@@ -233,34 +273,53 @@ class ScnData:
                 f'{name_source} already deactivates {name_target}.')
         self._deactivate_triggers[name_source].add(name_target)
 
-    def write_to_file(self, file_path):
+    def _add_activate_and_deactivate_effects(self):
         """
-        Writes the current scn file to `file_path`.
+        Adds all activate and deactivate triggers specified in the fields.
 
-        Overwrites any file currently at that path.
+        This method should be called at the end of setup_scenario after all
+        triggers are created.
         """
-        self._scn.write_to_file(file_path)
+        trigger_mgr = self._scn.object_manager.get_trigger_object()
+        effect_mapping_and_function = [
+            (self._activate_triggers, util_triggers.add_effect_activate),
+            (self._deactivate_triggers, util_triggers.add_effect_deactivate)
+        ]
+        for mapping, add_effect in effect_mapping_and_function:
+            for source_name, target_names in mapping.items():
+                for target_name in target_names:
+                    source_id = self._trigger_ids[source_name]
+                    source = trigger_mgr.get_trigger(trigger_id=source_id)
+                    target_id = self._trigger_ids[target_name]
+                    add_effect(source, target_id)
 
-    def setup_scenario(self):
-        """
-        Modifies the internal scenario file to support the changes
-        for Micro Wars!
-        """
-        self._name_variables()
-        self._add_initial_triggers()
-        self._setup_rounds()
-        self._add_activate_and_deactivate_effects()
+    def _add_effect_p1_score(self, trigger: TriggerObject,
+                             pts: int) -> None:
+        """Adds effects to trigger that change p1's score by pts."""
+        p1_plus = trigger.add_effect(effects.change_variable)
+        p1_plus.quantity = pts
+        p1_plus.operation = ChangeVarOp.add.value
+        p1_plus.from_variable = self._var_ids['p1-score']
+        p1_plus.message = 'p1-score'
+        diff_plus = trigger.add_effect(effects.change_variable)
+        diff_plus.quantity = pts
+        diff_plus.operation = ChangeVarOp.add.value
+        diff_plus.from_variable = self._var_ids['score-difference']
+        diff_plus.message = 'score-difference'
 
-    def _add_trigger(self, name: str):
-        """
-        Adds a trigger named name to the scenario and trigger_ids bidict.
-        Raises a ValueError if a trigger with that name already exists.
-        Returns the created trigger object.
-        """
-        if name in self._trigger_ids:
-            raise ValueError(f'{name} is already the name of a trigger.')
-        self._trigger_ids[name] = len(self._trigger_ids)
-        return self._scn.object_manager.get_trigger_object().add_trigger(name)
+    def _add_effect_p2_score(self, trigger: TriggerObject,
+                             pts: int) -> None:
+        """Adds effects to trigger that change p2's score by pts."""
+        p2_plus = trigger.add_effect(effects.change_variable)
+        p2_plus.quantity = pts
+        p2_plus.operation = ChangeVarOp.add.value
+        p2_plus.from_variable = self._var_ids['p2-score']
+        p2_plus.message = 'p2-score'
+        diff_subtract = trigger.add_effect(effects.change_variable)
+        diff_subtract.quantity = pts
+        diff_subtract.operation = ChangeVarOp.subtract.value
+        diff_subtract.from_variable = self._var_ids['score-difference']
+        diff_subtract.message = 'score-difference'
 
     def _name_variables(self) -> None:
         """Sets the names for trigger variables in the scenario."""
@@ -288,20 +347,6 @@ class ScnData:
         self._create_map_revealer_triggers()
         self._add_objectives()
         self._add_victory_conditions()
-
-    def _add_trigger_header(self, name: str) -> None:
-        """
-        Appends a trigger section header with title `name`.
-
-        A header trigger serves no functional purpose, but allows
-        the trigger list to be broken up into sections so that
-        it is more human-readable in the editor.
-
-        Raises a ValueError if creating this trigger would create a
-        trigger with a duplicate name.
-        """
-        trigger_name = f'-- {name} --'
-        self._add_trigger(trigger_name)
 
     def _initialize_variable_values(self) -> None:
         """
@@ -614,54 +659,16 @@ class ScnData:
         util_triggers.add_cond_timer(declare_victory_p2, DELAY_VICTORY)
         util_triggers.add_effect_delcare_victory(declare_victory_p2, 2)
 
-    def get_and_inc_id(self):
-        """Returns the next unit id and increments the unit id counter."""
-        data_header = self._scn.parsed_data['DataHeaderPiece']
-        unit_id = data_header.retrievers[0].data
-        data_header.retrievers[0].data += 1
-        return unit_id
-
-    def _copy_unit(self, unit: UnitStruct, player: int) -> UnitStruct:
+    def _setup_rounds(self) -> None:
         """
-        Adds a copy of unit to the player's list of units.
-
-        Returns the unit that is added.
+        Copies the units from the fight data and adds triggers for each
+        round of units.
         """
-        u = copy.deepcopy(unit)
-        unit_id = self.get_and_inc_id()
-        util_units.set_id(u, unit_id)
-        units = self._scn.parsed_data['UnitsPiece'].retrievers[4].data[player]
-        units.retrievers[0].data += 1
-        units.retrievers[1].data.append(u)
-        return u
+        for index, f in enumerate(self._fights):
+            self._add_trigger_header(
+                f'Fight {index}' if index else 'Tiebreaker')
+            self._add_fight(index, f)
 
-    def _add_effect_p1_score(self, trigger: TriggerObject,
-                             pts: int) -> None:
-        """Adds effects to trigger that change p1's score by pts."""
-        p1_plus = trigger.add_effect(effects.change_variable)
-        p1_plus.quantity = pts
-        p1_plus.operation = ChangeVarOp.add.value
-        p1_plus.from_variable = self._var_ids['p1-score']
-        p1_plus.message = 'p1-score'
-        diff_plus = trigger.add_effect(effects.change_variable)
-        diff_plus.quantity = pts
-        diff_plus.operation = ChangeVarOp.add.value
-        diff_plus.from_variable = self._var_ids['score-difference']
-        diff_plus.message = 'score-difference'
-
-    def _add_effect_p2_score(self, trigger: TriggerObject,
-                             pts: int) -> None:
-        """Adds effects to trigger that change p2's score by pts."""
-        p2_plus = trigger.add_effect(effects.change_variable)
-        p2_plus.quantity = pts
-        p2_plus.operation = ChangeVarOp.add.value
-        p2_plus.from_variable = self._var_ids['p2-score']
-        p2_plus.message = 'p2-score'
-        diff_subtract = trigger.add_effect(effects.change_variable)
-        diff_subtract.quantity = pts
-        diff_subtract.operation = ChangeVarOp.subtract.value
-        diff_subtract.from_variable = self._var_ids['score-difference']
-        diff_subtract.message = 'score-difference'
 
     def _add_unit(self, fight_index: int, unit: UnitStruct, from_player: int,
                   init: TriggerObject, begin: TriggerObject,
@@ -669,13 +676,12 @@ class ScnData:
                   cleanup: TriggerObject) -> None:
         """
         Adds the unit from player `from_player` to the scenario.
-        `fight_index` is the index of the fight in which the unit
-        participates.
-        Checks from_player is 1 or 2.
+        `fight_index` is the index of the fight in which the unit participates.
+        Checks that from_player is 1 or 2.
         """
         assert from_player in (1, 2)
 
-        u = self._copy_unit(unit, 3)
+        u = util_units.copy_unit(self._scn, unit, 3)
         uid = util_units.get_id(u)
 
         # Hides the unit in the top corner.
@@ -744,7 +750,6 @@ class ScnData:
             self._add_activate(init_name, TIEBREAKER_OBJ_NAME)
         self._add_activate(init_name, begin_name)
 
-
         for player in (1, 2, 3):
             for tech_name in f.techs:
                 tech_id = util_techs.TECH_IDS[tech_name]
@@ -797,24 +802,6 @@ class ScnData:
         for unit in f.p2_units:
             self._add_unit(index, unit, 2, init, begin, p1_wins, p2_wins,
                            cleanup)
-
-    def _setup_rounds(self) -> None:
-        """
-        Copies the units from the fight data and adds triggers for each
-        round of units.
-        """
-        for index, f in enumerate(self._fights):
-            self._add_trigger_header(
-                f'Fight {index}' if index else 'Tiebreaker')
-            self._add_fight(index, f)
-
-
-# Utility functions for handling terrain.
-def map_dimensions(scenario: AoE2Scenario) -> Tuple[int, int]:
-    map_piece = scenario.parsed_data['MapPiece']
-    width = map_piece.retrievers[9].data
-    height = map_piece.retrievers[10].data
-    return width, height
 
 
 def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
