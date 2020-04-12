@@ -240,8 +240,8 @@ def center_units(unit_array: List[UnitStruct], center: Tuple[float, float],
 def center_units_flip(unit_array: List[UnitStruct], center: Tuple[float, float],
                       offset: int) -> None:
     """
-    Centers and flips the units in unit_array with distance offset from
-    the center.
+    Centers and flips the units in unit_array with distance offset
+    from the center.
     """
     avg = avg_pos(unit_array)
     for unit in unit_array:

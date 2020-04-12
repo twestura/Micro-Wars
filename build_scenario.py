@@ -41,8 +41,8 @@ from AoE2ScenarioParser.pieces.structs.variable_change import (
     VariableChangeStruct
 )
 from AoE2ScenarioParser.datasets import conditions, effects
-import fight
-from fight import Fight
+import event
+from event import Fight
 import util
 import util_techs
 import util_triggers
@@ -118,7 +118,7 @@ FIGHT_CENTER_Y = 120
 
 
 # The number of tiles from the center an army's average should start.
-FIGHT_OFFSET = 6
+FIGHT_OFFSET = 7
 
 
 # The trigger name for the init tiebreaker trigger.
@@ -806,7 +806,7 @@ class ScnData:
 
 def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
                    unit_template: str = UNIT_TEMPLATE,
-                   fight_json: str = fight.DEFAULT_FILE,
+                   event_json: str = event.DEFAULT_FILE,
                    output: str = OUTPUT):
     """
     Builds the scenario.
@@ -819,12 +819,11 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
         output: The output path to which the resulting scenario is written.
     """
     units_scn = AoE2Scenario(unit_template)
-    fight_data_list = fight.load_fight_data(fight_json)
-    fights = fight.make_fights(units_scn, fight_data_list,
+    fight_data_list = event.load_fight_data(event_json)
+    events = event.make_fights(units_scn, fight_data_list,
                                FIGHT_CENTER_X, FIGHT_CENTER_Y, FIGHT_OFFSET)
     scn = AoE2Scenario(scenario_template)
-    scn_data = ScnData(scn, fights)
-    # TODO add in minigames
+    scn_data = ScnData(scn, events)
     scn_data.setup_scenario()
     scn_data.write_to_file(output)
 
@@ -850,7 +849,7 @@ def call_build_scenario(args):
         raise ValueError(msg)
 
     build_scenario(scenario_template=scenario_map, unit_template=units_scn,
-                   fight_json=event_json, output=out)
+                   event_json=event_json, output=out)
 
 
 def build_publish_files(args):
@@ -864,59 +863,7 @@ def build_publish_files(args):
 def scratch(args): # pylint: disable=unused-argument
     """Runs a simple test experiment."""
     scratch_path = 'scratch.aoe2scenario'
-    units_scn = AoE2Scenario(UNIT_TEMPLATE)
-
-    p1_units = util_units.get_units_array(units_scn, 1)
-    sq1_units = util_units.units_in_area(p1_units, 20.0, 0.0, 40.0, 20.0)
-    for unit in sq1_units:
-        name = util_units.get_name(unit)
-        x = util_units.get_x(unit)
-        y = util_units.get_y(unit)
-        print(f'{name} ({x}, {y})')
-    avg1 = util_units.avg_pos(sq1_units)
-    print(f'sq1 average: {avg1}')
-
-    sq2_units = util_units.units_in_area(p1_units, 40.0, 0.0, 60.0, 20.0)
-    for unit in sq2_units:
-        name = util_units.get_name(unit)
-        x = util_units.get_x(unit)
-        y = util_units.get_y(unit)
-        print(f'{name} ({x}, {y})')
-    avg2 = util_units.avg_pos(sq2_units)
-    print(f'sq2 average: {avg2}')
-
-    trigger_mgr = units_scn.object_manager.get_trigger_object()
-    teleport_trigger = trigger_mgr.add_trigger('teleport')
-    center = (60.0, 60.0)
-    for unit in sq1_units:
-        new_pos = util_units.center_pos(unit, avg1, center, 5)
-        util_triggers.add_effect_teleport(
-            teleport_trigger, util_units.get_id(unit),
-            new_pos[0], new_pos[1], 1)
-
-    for unit in sq2_units:
-        util_units.flip_facing_h(unit)
-        new_pos = util_units.center_pos_flipped(unit, avg2, center, 5)
-        util_triggers.add_effect_teleport(
-            teleport_trigger, util_units.get_id(unit),
-            new_pos[0], new_pos[1], 1)
-    units_scn.write_to_file(scratch_path)
-
-    # for unit, copy in zip(p1_template_units_in, p1_template_units_out):
-        # unit_facing_flip_h(unit)
-        # unit_set_x(unit, 239.5)
-        # unit_set_y(unit, 0.5)
-        # unit_set_facing(unit, 0.0)
-        # unit_set_x(copy, 239.5)
-        # unit_set_y(copy, 0.5)
-        # unit_id = unit_get_id(unit)
-        # x = unit_get_x(unit)
-        # y = unit_get_y(unit)
-        # theta = unit_get_facing(unit)
-        # print(f'id: {unit_id}, x: {x}, y: {y}, theta: {theta}')
-    # unit_change_player(units_scenario_out, 0, 1, 2)
-    # triggers_out.add_header('Hello, World!')
-    # units_scenario_out.write_to_file(output_path)
+    print(scratch_path)
 
 
 def main():
@@ -928,7 +875,7 @@ def main():
                               help='Filepath to the map template input file.')
     parser_build.add_argument('--units', nargs=1, default=[UNIT_TEMPLATE],
                               help='Filepath to the unit template input file.')
-    parser_build.add_argument('--events', nargs=1, default=[fight.DEFAULT_FILE],
+    parser_build.add_argument('--events', nargs=1, default=[event.DEFAULT_FILE],
                               help='Filepath to the event json file.')
     parser_build.add_argument('--output', '-o', nargs=1, default=[OUTPUT],
                               help='Filepath to which the output is written, must differ from all input files.') #pylint: disable=line-too-long

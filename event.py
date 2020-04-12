@@ -7,7 +7,6 @@ GNU General Public License v3.0: See the LICENSE file.
 
 import copy
 import json
-from enum import Enum
 from typing import Dict, List, Tuple
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
 from AoE2ScenarioParser.pieces.structs.unit import UnitStruct
@@ -17,7 +16,7 @@ import util_units
 
 
 # Default filepath from which to load fight data.
-DEFAULT_FILE = 'fights.json'
+DEFAULT_FILE = 'events.json'
 
 
 # The maximum number of fights, including the tiebreaker.
@@ -83,12 +82,6 @@ class FightData:
         """Returns a FightData object that is represented by json string s."""
         loaded = json.loads(s)
         return FightData(loaded['techs'], loaded['points'])
-
-
-class FightType(Enum):
-    """Represents whether a fight is symmetrical or asymmetrical."""
-    sym = 0
-    asym = 1
 
 
 class Fight:
