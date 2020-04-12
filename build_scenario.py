@@ -96,11 +96,11 @@ MAP_WIDTH = 240
 
 
 # X coordinate of the player's starting view.
-START_VIEW_X = 120
+START_VIEW_X = 121
 
 
 # Y coordinate of the player's starting view.
-START_VIEW_Y = 119
+START_VIEW_Y = 120
 
 
 # The x coordinate of the location around which to center fights.
@@ -441,7 +441,6 @@ class ScnData:
         tiebreaker_obj.mute_objectives = True
         util_triggers.add_cond_gaia_defeated(tiebreaker_obj)
 
-        # TODO activate and deactivate objectives in init and cleanup
         for f_index, f in enumerate(self._fights):
             if f_index != 0:
                 fight_obj_text = f.objectives_description()
@@ -487,7 +486,6 @@ class ScnData:
         diff0.comparison = VarValComp.equal.value
         self._add_deactivate(check_tie_name, check_not_tie_name)
         self._add_activate(check_tie_name, TIEBREAKER_INIT_NAME)
-        # TODO the tiebreaker needs to activate check winner when it's over
 
         check_not_tie = self._add_trigger(check_not_tie_name)
         check_not_tie.enabled = False
@@ -769,14 +767,10 @@ class ScnData:
         Copies the units from the fight data and adds triggers for each
         round of units.
         """
-        # TODO handle tiebreaker and final round.
         for index, f in enumerate(self._fights):
             self._add_trigger_header(
                 f'Fight {index}' if index else 'Tiebreaker')
             self._add_fight(index, f)
-        # TODO "asymmetrical fights" aren't working
-        # TODO deleting all units doesn't grant score (last kill likely
-        # is cancelled)
 
 
 # Utility functions for handling terrain.
