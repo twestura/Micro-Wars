@@ -190,6 +190,7 @@ def make_fights(units_scn: AoE2Scenario, fds: List[FightData],
     p2_units_all = util_units.get_units_array(units_scn, 2)
 
     fights = []
+    techs = set()
     for index, fd in enumerate(fds):
         x1, y1 = get_start_tile(index)
         x2, y2 = x1 + TILE_WIDTH, y1 + TILE_WIDTH
@@ -217,7 +218,10 @@ def make_fights(units_scn: AoE2Scenario, fds: List[FightData],
             util_units.center_units_flip(p1_units2, center, -offset)
             util_units.center_units_flip(p2_units2, center, offset)
             fights.append(Fight(fd, p1_units2, p2_units2))
-    # TODO check techs being researched multiple times
+        for tech in fd.techs:
+            if tech in techs:
+                raise ValueError(f'Tech {tech} is researched multiple times.')
+            techs.add(tech)
     return fights
 
 
