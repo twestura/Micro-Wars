@@ -132,6 +132,23 @@ ROUND_OBJ_NAME = '[O] Round Objective'
 TIEBREAKER_OBJ_NAME = '[O] Tiebreaker'
 
 
+# Unit ID for a Map Revealer object.
+UNIT_ID_MAP_REVEALER = 837
+
+
+# Pairs of integer (x, y) tiles at which to create map revealers.
+REVEALER_LOCATIONS = [
+    # (FIGHT_CENTER_X, FIGHT_CENTER_Y)
+    (x, y)
+    for x in range(FIGHT_CENTER_X - 18, FIGHT_CENTER_X + 19, 3)
+    for y in range(FIGHT_CENTER_Y - 18, FIGHT_CENTER_Y + 19, 3)
+]
+
+
+# Trigger for creating map revealers.
+REVEALER_CREATE_NAME = '[I] Create Map Revealers'
+
+
 class ChangeVarOp(Enum):
     """Represents the value for the operation of a Change Variable Effect."""
     set_op = 1
@@ -268,6 +285,7 @@ class ScnData:
         self._initialize_variable_values()
         self._add_start_timer()
         self._set_start_views()
+        self._create_map_revealer_triggers()
         self._add_objectives()
         self._add_victory_conditions()
 
@@ -334,6 +352,25 @@ class ScnData:
             change_view.location_x = START_VIEW_X
             change_view.location_y = START_VIEW_Y
             change_view.scroll = False
+
+    def _create_map_revealer_triggers(self) -> None:
+        """
+        Creates a set of map revealers to cover the middle area.
+        Loops and disables itself.
+        Can be re-enabled to make additional map revealers.
+        """
+        create_revealers = self._add_trigger(REVEALER_CREATE_NAME)
+        create_revealers.enabled = False
+        create_revealers.looping = True
+        self._add_deactivate(REVEALER_CREATE_NAME, REVEALER_CREATE_NAME)
+        for player in (1, 2):
+            for (x, y) in REVEALER_LOCATIONS:
+                create = create_revealers.add_effect(effects.create_object)
+                create.object_list_unit_id = UNIT_ID_MAP_REVEALER
+                create.player_source = player
+                create.location_x = x
+                create.location_y = y
+                # create.item_id = ITEM_ID_MAP_REVEALER
 
     def _add_objectives(self) -> None:
         """
@@ -698,6 +735,7 @@ class ScnData:
             init_var.comparison = VarValComp.equal.value
             if index == 1:
                 self._add_activate(init_name, ROUND_OBJ_NAME)
+                self._add_activate(init_name, REVEALER_CREATE_NAME)
             self._add_activate(init_name, self._round_objective[index])
         else:
             # Disables the tiebreaker. The tiebreak launches only when
@@ -711,8 +749,6 @@ class ScnData:
             for tech_name in f.techs:
                 tech_id = util_techs.TECH_IDS[tech_name]
                 util_triggers.add_effect_research_tech(init, tech_id, player)
-
-        # TODO map revealers
 
         for player in (1, 2):
             change_view = init.add_effect(effects.change_view)
@@ -804,25 +840,6 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
     # TODO add in minigames
     scn_data.setup_scenario()
     scn_data.write_to_file(output)
-
-    # for k, f in enumerate(fights):
-    #     print(f'Values {k}:')
-    #     print(f.objectives_description())
-        # print(f'p1 bonus: {f.p1_bonus}, p2 bonus: {f.p2_bonus}')
-    #     print('P1 Units:')
-    #     for unit in f.p1_units:
-    #         name = util_units.get_name(unit)
-    #         x = util_units.get_x(unit)
-    #         y = util_units.get_y(unit)
-    #         theta = util_units.get_facing(unit)
-    #         print(f'  {name} - ({x}, {y}) - facing {theta}')
-    #     print('P2 Units:')
-    #     for unit in f.p2_units:
-    #         name = util_units.get_name(unit)
-    #         x = util_units.get_x(unit)
-    #         y = util_units.get_y(unit)
-    #         theta = util_units.get_facing(unit)
-    #         print(f'  {name} - ({x}, {y}) - facing {theta}')
 
 
 def call_build_scenario(args):
