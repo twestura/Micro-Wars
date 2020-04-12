@@ -1,6 +1,6 @@
 [
     {
-        "techs": ["husbandry", "mahouts"],
+        "techs": ["mahouts"],
         "points": {
             "elite_war_elephant": 0
         }
@@ -26,6 +26,25 @@
             "archer": 5,
             "skirmisher": 4,
             "spearman": 3
+        }
+    },
+    {
+        "techs": ["castle_age", "bodkin_arrow"],
+        "points": {
+            "mangonel": 25,
+            "crossbowman": 2
+        }
+    },
+    {
+        "techs": [
+            "bloodlines", "husbandry", "elite_skirmisher",
+            "scale_barding_armor", "chain_barding_armor"
+        ],
+        "points": {
+            "knight": 8,
+            "monk": 10,
+            "elite_skirmisher": 4,
+            "cavalry_archer": 5
         }
     }
 ]
