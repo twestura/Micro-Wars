@@ -12,9 +12,9 @@ from AoE2ScenarioParser.datasets import techs
 
 # Bidirectional map between technology names and ids.
 TECH_IDS = bidict()
-for x in techs.__dict__:
-    if '__' not in x and 'get_tech_id_by_string' not in x:
-        TECH_IDS[x] = techs.get_tech_id_by_string(x)
+for _t in techs.__dict__:
+    if '__' not in _t and 'get_tech_id_by_string' not in _t:
+        TECH_IDS[_t] = techs.get_tech_id_by_string(_t)
 
 
 def is_tech(tech_name: str) -> bool:

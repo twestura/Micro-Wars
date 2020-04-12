@@ -168,6 +168,7 @@ class Fight:
         return self._p2_bonus
 
 
+# TODO increase distance between fights (so SO don't auto-attack)
 def make_fights(units_scn: AoE2Scenario, fds: List[FightData],
                 center_x: int, center_y: int, offset: int) -> List[Fight]:
     """
