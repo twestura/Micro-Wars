@@ -821,7 +821,7 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
     units_scn = AoE2Scenario(unit_template)
     fight_data_list = event.load_fight_data(event_json)
     events = event.make_fights(units_scn, fight_data_list,
-                               FIGHT_CENTER_X, FIGHT_CENTER_Y, FIGHT_OFFSET)
+                               (FIGHT_CENTER_X, FIGHT_CENTER_Y), FIGHT_OFFSET)
     scn = AoE2Scenario(scenario_template)
     scn_data = ScnData(scn, events)
     scn_data.setup_scenario()

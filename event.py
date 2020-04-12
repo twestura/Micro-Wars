@@ -44,6 +44,22 @@ def get_start_tile(index: int) -> Tuple[int, int]:
     return x * TILE_WIDTH, y * TILE_WIDTH
 
 
+class Minigame:
+    """An instance represents a minigame."""
+
+    def __init__(self, n: str):
+        """Initializes a new Minigame with name n."""
+        self._name = n
+
+    @property
+    def name(self) -> str:
+        """Returns this Minigame's name."""
+        return self._name
+
+    def __str__(self):
+        return self.name()
+
+
 class FightData:
     """An instance represents a fight in the middle of the map."""
 
@@ -161,36 +177,37 @@ class Fight:
         return self._p2_bonus
 
 
-# TODO increase distance between fights (so SO don't auto-attack)
-def make_fights(units_scn: AoE2Scenario, fds: List[FightData],
-                center_x: int, center_y: int, offset: int) -> List[Fight]:
+# TODO annotate type of event_data
+# TODO annotate with sum return type of fight or minigame
+def make_fights(units_scn: AoE2Scenario, event_data,
+                center: Tuple[int, int], offset: int):
     """
-    Raises a ValueError if there is an invalid fight, or if there are too many
-    fights.
+    Raises a ValueError if there is an invalid fight.
 
-    center_x and center_y are the coordinates around which the fight is
-    centered.
+    center is the tile around which the fight is centered.
     offset is the number of tiles away from the center to move the units.
 
-    The fight at index k is loaded at the kth tile in the units_scn.
+    The kth fight is loaded from the kth tile in the units_scn.
     """
-    num_fights = len(fds)
-    if num_fights > FIGHT_LIMIT:
-        msg = f'There are {num_fights} fights, but the limit is {FIGHT_LIMIT}.'
-        raise ValueError(msg)
-    center = (center_x, center_y)
-
     p1_units_all = util_units.get_units_array(units_scn, 1)
     p2_units_all = util_units.get_units_array(units_scn, 2)
 
-    fights = []
+    # num_fights is the index from which to load the next fight
+    fight_index = 0
+    events = []
     techs = set()
-    for index, fd in enumerate(fds):
-        x1, y1 = get_start_tile(index)
+    for event in event_data:
+        if isinstance(event, Minigame):
+            events.append(event)
+            continue
+
+        assert isinstance(event, FightData)
+        fd = event
+        x1, y1 = get_start_tile(fight_index)
         x2, y2 = x1 + TILE_WIDTH, y1 + TILE_WIDTH
         p1_units = util_units.units_in_area(p1_units_all, x1, y1, x2, y2)
         if not p1_units:
-            raise ValueError(f'Fight {index} has no units.')
+            raise ValueError(f'Fight at tile {fight_index} has no units.')
         p2_units = util_units.units_in_area(p2_units_all, x1, y1, x2, y2)
         if not p2_units:
             # Symmetrical fight where only 1 player has units.
@@ -198,7 +215,7 @@ def make_fights(units_scn: AoE2Scenario, fds: List[FightData],
             p2_units = [copy.deepcopy(unit) for unit in p1_units]
             util_units.center_units(p1_units, center, offset)
             util_units.center_units_flip(p2_units, center, offset)
-            fights.append(Fight(fd, p1_units, p2_units))
+            events.append(Fight(fd, p1_units, p2_units))
         else:
             # Asymmetrical fight where p1 and p2 both have units.
             # Creates two rounds, with players switching units between fights.
@@ -207,23 +224,38 @@ def make_fights(units_scn: AoE2Scenario, fds: List[FightData],
 
             util_units.center_units(p1_units, center, offset)
             util_units.center_units(p2_units, center, -offset)
-            fights.append(Fight(fd, p1_units, p2_units))
+            events.append(Fight(fd, p1_units, p2_units))
 
             util_units.center_units_flip(p1_units2, center, -offset)
             util_units.center_units_flip(p2_units2, center, offset)
-            fights.append(Fight(fd, p1_units2, p2_units2))
+            events.append(Fight(fd, p1_units2, p2_units2))
         for tech in fd.techs:
             if tech in techs:
                 raise ValueError(f'Tech {tech} is researched multiple times.')
             techs.add(tech)
-    return fights
+        fight_index += 1
+    return events
 
 
-def load_fight_data(filepath: str = DEFAULT_FILE) -> List[FightData]:
+# TODO annotate the sum type of fight data and minigame name
+def load_fight_data(filepath: str = DEFAULT_FILE):
     """
     Parses the fight json at filepath and returns a list of the
     fight information from that file.
+
+    Raises a ValueError if there are too many fights.
     """
     with open(filepath) as json_file:
         loaded = json.loads(json_file.read())
-    return [FightData(dct['techs'], dct['points']) for dct in loaded]
+    event_data = []
+    num_fights = 0
+    for event in loaded:
+        if isinstance(event, str):
+            event_data.append(Minigame(event))
+        else:
+            num_fights += 1
+            if num_fights > FIGHT_LIMIT:
+                msg = f'{num_fights} fights exceeds the limit {FIGHT_LIMIT}.'
+                raise ValueError(msg)
+            event_data.append(FightData(event['techs'], event['points']))
+    return event_data
