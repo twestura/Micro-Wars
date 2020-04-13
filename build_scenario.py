@@ -354,8 +354,21 @@ class ScnData:
         Adds triggers for informing players if the correct AI script
         is not loaded.
         """
-        self._add_trigger_header('AI')
-        # TODO implement
+        # self._add_trigger_header('AI')
+        # AI signals do not work in multiplayer on DE.
+        # If they do get fixed, this method should create three triggers:
+        # 1. Declare AI Victory
+        #    * Starts Disabled
+        #    * Timer: 10
+        #    * Declare Victory: Player 3
+        # 2. * AI Script Not Loaded
+        #    * Timer: 5
+        #    * Activate Trigger: Declare AI Victory
+        #    * Display Instructions: Micro Wars AI Script not Loaded
+        # 3. AI Script Loaded
+        #    * Condition: AI Signal 0
+        #    * Disable Trigger: AI Script Not Loaded
+        pass
 
     def _add_initial_triggers(self) -> None:
         """
