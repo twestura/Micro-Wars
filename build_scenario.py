@@ -155,6 +155,14 @@ REVEALER_LOCATIONS = [
 REVEALER_CREATE_NAME = '[I] Create Map Revealers'
 
 
+# Unit ID for Player 1's Castle in the Castle Siege minigame.
+CS_P1_CASTLE_ID = 813
+
+
+# Unit ID for Player 2's Castle in the Castle Siege minigame.
+CS_P2_CASTLE_ID = 830
+
+
 class ChangeVarOp(Enum):
     """Represents the value for the operation of a Change Variable Effect."""
     set_op = 1
@@ -221,6 +229,7 @@ class ScnData:
         for Micro Wars!
         """
         self._name_variables()
+        self._add_ai_triggers()
         self._add_initial_triggers()
         self._setup_rounds()
         self._add_activate_and_deactivate_effects()
@@ -339,6 +348,14 @@ class ScnData:
             var.retrievers[1].data = name
             var_change.append(var)
             var_count.data += 1
+
+    def _add_ai_triggers(self) -> None:
+        """
+        Adds triggers for informing players if the correct AI script
+        is not loaded.
+        """
+        self._add_trigger_header('AI')
+        # TODO implement
 
     def _add_initial_triggers(self) -> None:
         """
@@ -531,8 +548,7 @@ class ScnData:
         for e_index, e in enumerate(self._events):
             if e_index != 0:
                 if isinstance(e, Minigame):
-                    # TODO add minigame objectives
-                    pass
+                    self._add_minigame_objective(e, e_index)
                 else:
                     fight_obj_text = e.objectives_description()
                     fight_obj_name = f'[O] Fight {e_index} Objective'
@@ -547,7 +563,7 @@ class ScnData:
                     fight_obj.mute_objectives = True
                     util_triggers.add_cond_gaia_defeated(fight_obj)
 
-    def _add_minigame_objective(self, mg: event.Game, index: int):
+    def _add_minigame_objective(self, mg: Minigame, index: int):
         """
         Adds the objectives corresponding to minigame mg to the
         index of _round_objectives.
@@ -556,13 +572,51 @@ class ScnData:
         """
         assert self._round_objectives[index] == []
 
-        if mg == event.Game.castle_siege:
+        if mg.name == 'Castle Siege':
             self._add_castle_siege_objectives(index)
-        # TODO implement.
+        # TODO implement other minigames.
+        else:
+            raise AssertionError(f'Minigame {mg.name} not implemented.')
 
     def _add_castle_siege_objectives(self, index: int):
         """Adds the objectives for the Castle Siege minigame."""
-        pass
+        obj_cs_name = f'[O] Round {index} Castle Siege'
+        self._round_objectives[index].append(obj_cs_name)
+        obj_cs = self._add_trigger(obj_cs_name)
+        obj_cs.enabled = False
+        obj_cs.description = "Raise your opponent's Castle or defeat their entire army to win." # pylint: disable=line-too-long
+        obj_cs.short_description = "Raise your opponent's Castle."
+        obj_cs.display_as_objective = True
+        obj_cs.display_on_screen = True
+        obj_cs.description_order = 50
+        obj_cs.mute_objectives = True
+        util_triggers.add_cond_gaia_defeated(obj_cs)
+
+        obj_cs_p1_name = f'[O] Castle Siege Player 1 Castle Destroyed'
+        self._round_objectives[index].append(obj_cs_p1_name)
+        obj_cs_p1 = self._add_trigger(obj_cs_p1_name)
+        obj_cs_p1.enabled = False
+        obj_cs_p1.description = "- Player 1 Castle Destroyed"
+        obj_cs_p1.short_description = "- P1 Castle Destroyed"
+        obj_cs_p1.display_as_objective = True
+        obj_cs_p1.display_on_screen = True
+        obj_cs_p1.description_order = 49
+        obj_cs_p1.mute_objectives = True
+        p1_castle_destroyed = obj_cs_p1.add_condition(conditions.destroy_object)
+        p1_castle_destroyed.unit_object = CS_P1_CASTLE_ID
+
+        obj_cs_p2_name = f'[O] Castle Siege Player 2 Castle Destroyed'
+        self._round_objectives[index].append(obj_cs_p2_name)
+        obj_cs_p2 = self._add_trigger(obj_cs_p2_name)
+        obj_cs_p2.enabled = False
+        obj_cs_p2.description = "- Player 2 Castle Destroyed"
+        obj_cs_p2.short_description = "- P2 Castle Destroyed"
+        obj_cs_p2.display_as_objective = True
+        obj_cs_p2.display_on_screen = True
+        obj_cs_p2.description_order = 48
+        obj_cs_p2.mute_objectives = True
+        p2_castle_destroyed = obj_cs_p2.add_condition(conditions.destroy_object)
+        p2_castle_destroyed.unit_object = CS_P2_CASTLE_ID
 
     def _add_victory_conditions(self):
         """
@@ -699,9 +753,161 @@ class ScnData:
                     f'Fight {index}' if index else 'Tiebreaker')
                 self._add_fight(index, e)
 
-    def _add_minigame(self, index: int, m: Minigame) -> None:
-        """Adds the minigame with the given index."""
-        pass # TODO implement
+    def _add_minigame(self, index: int, mg: Minigame) -> None:
+        """Adds the minigame mg with the given index."""
+        # TODO map revealer minigame transitions
+        # TODO use enum instead of checking name
+        if mg.name == 'Castle Siege':
+            self._add_castle_siege(index)
+        else:
+            raise AssertionError(f'Minigame {mg.name} is not implemented.')
+
+    def _add_castle_siege(self, index: int) -> None:
+        """
+        Adds the Castle Siege minigame at the given index.
+
+        Checks the index is not 0 (cannot us a minigame as the tiebreaker).
+        """
+        assert index
+        prefix = f'[R{index}]' if index else '[T]'
+        init_name = f'{prefix} Initialize Round'
+        begin_name = f'{prefix} Begin Round'
+        p1_wins_name = f'{prefix} Player 1 Wins Round'
+        p1_loses_castle_name = f'{prefix} Player 1 Loses Castle'
+        p1_loses_army_name = f'{prefix} Player 1 Loses Army'
+        p2_wins_name = f'{prefix} Player 2 Wins Round'
+        p2_loses_castle_name = f'{prefix} Player 2 Loses Castle'
+        p2_loses_army_name = f'{prefix} Player 2 Loses Army'
+        cleanup_name = f'{prefix} Cleanup Round'
+        increment_name = f'{prefix} Increment Round'
+
+        init = self._add_trigger(init_name)
+        init_var = init.add_condition(conditions.variable_value)
+        init_var.amount_or_quantity = index
+        init_var.variable = self._var_ids['round']
+        init_var.comparison = VarValComp.equal.value
+        if index == 1:
+            self._add_activate(init_name, ROUND_OBJ_NAME)
+            # TODO transition minigame map revealers
+            self._add_activate(init_name, REVEALER_CREATE_NAME)
+        obj_names = self._round_objectives[index]
+        for obj_name in obj_names:
+            self._add_activate(init_name, obj_name)
+        self._add_activate(init_name, begin_name)
+
+        # TODO research minigame techs
+
+        for player in (1, 2):
+            change_view = init.add_effect(effects.change_view)
+            change_view.player_source = player
+            # TODO remove magic numbers
+            change_view.location_x = 120
+            change_view.location_y = 40
+
+        begin = self._add_trigger(begin_name)
+        begin.enabled = False
+        util_triggers.add_cond_timer(begin, DELAY_ROUND_BEFORE)
+        # Begin changes ownership
+        p3_units = util_units.get_units_array(self._scn, 3)
+        # TODO remove magic numbers
+        cs_units = util_units.units_in_area(p3_units, 80.0, 0, 160.0, 80.0)
+        unit_player_pairs = []
+        for unit in cs_units:
+            pos = util_units.get_x(unit) + util_units.get_y(unit)
+            player_target = 1 if pos < 160.0 else 2 # TODO remove magic number
+            change_to_player = begin.add_effect(effects.change_ownership)
+            change_to_player.number_of_units_selected = 1
+            change_to_player.player_source = 3
+            change_to_player.player_target = player_target
+            uid = util_units.get_id(unit)
+            change_to_player.selected_object_id = uid
+            unit_player_pairs.append((uid, player_target))
+
+        # Cleanup
+
+        # p2 loses castle
+        p2_loses_castle = self._add_trigger(p2_loses_castle_name)
+        p2_c_cond = p2_loses_castle.add_condition(conditions.destroy_object)
+        p2_c_cond.unit_object = CS_P2_CASTLE_ID
+        self._add_activate(p2_loses_castle_name, p1_wins_name)
+        self._add_deactivate(p2_loses_castle_name, p2_loses_army_name)
+        self._add_deactivate(p2_loses_castle_name, p1_loses_castle_name)
+        self._add_deactivate(p2_loses_castle_name, p1_loses_army_name)
+
+        # p2 loses army
+        p2_loses_army = self._add_trigger(p2_loses_army_name)
+        for unit in cs_units:
+            pos = util_units.get_x(unit) + util_units.get_y(unit)
+            uid = util_units.get_id(unit)
+            if pos >= 160.0 and uid != CS_P2_CASTLE_ID:
+                p2_u_cond = p2_loses_army.add_condition(
+                    conditions.destroy_object)
+                p2_u_cond.unit_object = uid
+        self._add_activate(p2_loses_army_name, p2_wins_name)
+        self._add_deactivate(p2_loses_army_name, p1_loses_castle_name)
+        self._add_deactivate(p2_loses_army_name, p1_loses_army_name)
+        self._add_deactivate(p2_loses_army_name, p2_loses_castle_name)
+
+        # p1 wins
+        p1_wins = self._add_trigger(p1_wins_name)
+        p1_wins.enabled = False
+        self._add_effect_p1_score(p1_wins, event.MAX_POINTS)
+        self._add_activate(p1_wins_name, cleanup_name)
+
+        # p1 loses castle
+        p1_loses_castle = self._add_trigger(p1_loses_castle_name)
+        p1_c_cond = p1_loses_castle.add_condition(conditions.destroy_object)
+        p1_c_cond.unit_object = CS_P1_CASTLE_ID
+        self._add_activate(p1_loses_castle_name, p2_wins_name)
+        self._add_deactivate(p1_loses_castle_name, p1_loses_army_name)
+        self._add_deactivate(p1_loses_castle_name, p2_loses_castle_name)
+        self._add_deactivate(p1_loses_castle_name, p2_loses_army_name)
+
+        # p1 loses army
+        p1_loses_army = self._add_trigger(p1_loses_army_name)
+        for unit in cs_units:
+            pos = util_units.get_x(unit) + util_units.get_y(unit)
+            uid = util_units.get_id(unit)
+            if pos < 160.0 and uid != CS_P1_CASTLE_ID:
+                p1_u_cond = p1_loses_army.add_condition(
+                    conditions.destroy_object)
+                p1_u_cond.unit_object = uid
+        self._add_activate(p1_loses_army_name, p1_wins_name)
+        self._add_deactivate(p1_loses_army_name, p2_loses_castle_name)
+        self._add_deactivate(p1_loses_army_name, p2_loses_army_name)
+        self._add_deactivate(p1_loses_army_name, p1_loses_castle_name)
+
+        # p2 wins
+        p2_wins = self._add_trigger(p2_wins_name)
+        p2_wins.enabled = False
+        self._add_effect_p2_score(p2_wins, event.MAX_POINTS)
+        self._add_activate(p2_wins_name, cleanup_name)
+
+        cleanup = self._add_trigger(cleanup_name)
+        cleanup.enabled = False
+        self._add_activate(cleanup_name, increment_name)
+        if index == self.num_rounds:
+            self._add_deactivate(cleanup_name, ROUND_OBJ_NAME)
+        # Cleanup removes units from player control.
+        for uid, player_source in unit_player_pairs:
+            change_from_player = cleanup.add_effect(effects.change_ownership)
+            change_from_player.number_of_units_selected = 1
+            change_from_player.player_source = player_source
+            change_from_player.player_target = 3
+            change_from_player.selected_object_id = uid
+
+        increment_round = self._add_trigger(increment_name)
+        increment_round.enabled = False
+        util_triggers.add_cond_timer(increment_round, DELAY_ROUND_AFTER)
+
+        change_round = increment_round.add_effect(effects.change_variable)
+        change_round.quantity = 1
+        change_round.operation = ChangeVarOp.add.value
+        change_round.from_variable = self._var_ids['round']
+        change_round.message = 'round'
+        obj_names = self._round_objectives[index]
+        for obj_name in obj_names:
+            self._add_deactivate(cleanup_name, obj_name)
 
     def _add_fight(self, index: int, f: Fight) -> None:
         """Adds the fight with the given index."""
@@ -725,6 +931,7 @@ class ScnData:
             init_var.comparison = VarValComp.equal.value
             if index == 1:
                 self._add_activate(init_name, ROUND_OBJ_NAME)
+                # TODO transition minigame map revealers
                 self._add_activate(init_name, REVEALER_CREATE_NAME)
             obj_names = self._round_objectives[index]
             for obj_name in obj_names:
@@ -809,6 +1016,7 @@ class ScnData:
         util_units.set_x(u, MAP_WIDTH - 0.5)
         util_units.set_y(u, 0.5)
 
+        # Init handles teleportation.
         teleport = init.add_effect(effects.teleport_object)
         teleport.number_of_units_selected = 1
         teleport.player_source = 3
@@ -816,6 +1024,7 @@ class ScnData:
         teleport.location_x = util_units.get_x(unit)
         teleport.location_y = util_units.get_y(unit)
 
+        # Begin handles ownership changes.
         change_own = begin.add_effect(effects.change_ownership)
         change_own.number_of_units_selected = 1
         change_own.player_source = 3
@@ -902,6 +1111,14 @@ def scratch(args): # pylint: disable=unused-argument
     """Runs a simple test experiment."""
     scratch_path = 'scratch.aoe2scenario'
     print(scratch_path)
+    scn = AoE2Scenario(SCENARIO_TEMPLATE)
+    p3_units = util_units.get_units_array(scn, 3)
+    for u in p3_units:
+        if util_units.get_unit_constant(u) == 82:
+            x = util_units.get_x(u)
+            y = util_units.get_y(u)
+            unit_id = util_units.get_id(u)
+            print(f'id: {unit_id} - ({x}, {y})')
 
 
 def main():

@@ -47,6 +47,7 @@
             "cavalry_archer": 5
         }
     },
+    "Castle Siege",
     {
         "techs": [
             "padded_archer_armor", "leather_archer_armor", "ring_archer_armor",

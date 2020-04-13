@@ -170,10 +170,14 @@ def flip_facing_h(unit: UnitStruct) -> None:
     set_facing(unit, phi)
 
 
+def get_unit_constant(unit: UnitStruct) -> int:
+    """Returns the int unit constant (the unit id in AGE)."""
+    return unit.retrievers[4].data
+
+
 def get_name(unit: UnitStruct) -> str:
     """Returns the string name of the unit (e.g. Militia, Archer)."""
-    unit_constant = unit.retrievers[4].data
-    return UNIT_IDS.inverse[unit_constant]
+    return UNIT_IDS.inverse[get_unit_constant(unit)]
 
 
 def avg_pos(unit_list: List[UnitStruct]) -> Tuple[float, float]:

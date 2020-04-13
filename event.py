@@ -53,6 +53,19 @@ class Game(Enum):
     castle_siege = 7
 
 
+def name_of(game: Game) -> str:
+    """Returns the string name of game."""
+    if game == Game.galley_micro:
+        return 'Galley Micro'
+    elif game == Game.capture_the_relic:
+        return 'Capture the Relic'
+    elif game == Game.daut_castle:
+        return 'DauT Castle'
+    elif game == Game.castle_siege:
+        return 'Castle Siege'
+    raise AssertionError(f'enum {game.value} does not have a name.')
+
+
 class Minigame:
     """An instance represents a minigame."""
 
