@@ -6,6 +6,7 @@ GNU General Public License v3.0: See the LICENSE file.
 
 
 import copy
+from enum import Enum
 import json
 from typing import Dict, List, Tuple
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
@@ -44,17 +45,30 @@ def get_start_tile(index: int) -> Tuple[int, int]:
     return x * TILE_WIDTH, y * TILE_WIDTH
 
 
+class Game(Enum):
+    """Indicates a hardcoded minigame."""
+    galley_micro = 4
+    capture_the_relic = 5
+    daut_castle = 6
+    castle_siege = 7
+
+
 class Minigame:
     """An instance represents a minigame."""
 
-    def __init__(self, n: str):
+    def __init__(self, n: str, techs: List[str]):
         """Initializes a new Minigame with name n."""
         self._name = n
+        self._techs = sorted(techs)
 
     @property
     def name(self) -> str:
         """Returns this Minigame's name."""
         return self._name
+
+    def tech_names(self):
+        """Yields the technologies researched by this Minigame."""
+        yield from self._techs
 
     def __str__(self):
         return self.name()
@@ -78,7 +92,7 @@ class FightData:
                 * A key in points is not a valid unit name.
                 * A value in points is nonpositive.
         """
-        self.techs = techs
+        self.techs = sorted(techs)
         self.points = points
         for tech_name in self.techs:
             if not util_techs.is_tech(tech_name):
@@ -251,7 +265,8 @@ def load_fight_data(filepath: str = DEFAULT_FILE):
     num_fights = 0
     for event in loaded:
         if isinstance(event, str):
-            event_data.append(Minigame(event))
+            # TODO load Minigame techs
+            event_data.append(Minigame(event, []))
         else:
             num_fights += 1
             if num_fights > FIGHT_LIMIT:

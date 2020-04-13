@@ -42,7 +42,7 @@ from AoE2ScenarioParser.pieces.structs.variable_change import (
 )
 from AoE2ScenarioParser.datasets import conditions, effects
 import event
-from event import Fight
+from event import Fight, Minigame
 import util
 import util_techs
 import util_triggers
@@ -131,7 +131,7 @@ CHECK_WINNER_NAME = '[V] Check Winner'
 
 
 # Name of the round counter trigger displayed in the menu and on screen.
-ROUND_OBJ_NAME = '[O] Round Objective'
+ROUND_OBJ_NAME = '[O] Round Objective Header'
 
 
 # Name of the tiebreaker header objective displayed in the menu and on screen.
@@ -184,10 +184,13 @@ class ScnData:
     4. Call the write_to_file method.
     """
 
-    def __init__(self, scn: AoE2Scenario, fights: List[Fight]):
+    # TODO map minigame to method
+
+    # TODO annotate the type of the events list
+    def __init__(self, scn: AoE2Scenario, events):
         """Initializes a new ScnData object for the scenario scn."""
         self._scn = scn
-        self._fights = fights
+        self._events = events
 
         # Bidirectional map from a trigger's name to its index.
         self._trigger_ids = bidict()
@@ -201,14 +204,16 @@ class ScnData:
         # Maps the name of a trigger t to a set of triggers that t deactivates.
         self._deactivate_triggers: Dict[str, Set[str]] = defaultdict(set)
 
-        # self._round_objective[k] is the name of the trigger to activate to
-        # display the objectives for round k.
-        self._round_objective: List[str] = [None] * len(self._fights)
+        # self._round_objective[k] is the list of names of the triggers
+        # to activate to display the objectives for round k.
+        self._round_objectives: List[List[str]] = [
+            [] for __ in range(len(self._events))
+        ]
 
     @property
     def num_rounds(self):
         """Returns the number of rounds, not including the tiebreaker."""
-        return len(self._fights) - 1
+        return len(self._events) - 1
 
     def setup_scenario(self):
         """
@@ -415,7 +420,7 @@ class ScnData:
                 create.player_source = player
                 create.location_x = x
                 create.location_y = y
-                # create.item_id = ITEM_ID_MAP_REVEALER
+        # TODO map revealers for minigames
 
     def _add_objectives(self) -> None:
         """
@@ -523,20 +528,41 @@ class ScnData:
         tiebreaker_obj.mute_objectives = True
         util_triggers.add_cond_gaia_defeated(tiebreaker_obj)
 
-        for f_index, f in enumerate(self._fights):
-            if f_index != 0:
-                fight_obj_text = f.objectives_description()
-                fight_obj_name = f'[O] Round {f_index} Objective'
-                self._round_objective[f_index] = fight_obj_name
-                fight_obj = self._add_trigger(fight_obj_name)
-                fight_obj.enabled = False
-                fight_obj.display_as_objective = True
-                fight_obj.display_on_screen = True
-                fight_obj.description_order = 50
-                fight_obj.short_description = fight_obj_text
-                fight_obj.description = fight_obj_text
-                fight_obj.mute_objectives = True
-                util_triggers.add_cond_gaia_defeated(fight_obj)
+        for e_index, e in enumerate(self._events):
+            if e_index != 0:
+                if isinstance(e, Minigame):
+                    # TODO add minigame objectives
+                    pass
+                else:
+                    fight_obj_text = e.objectives_description()
+                    fight_obj_name = f'[O] Fight {e_index} Objective'
+                    self._round_objectives[e_index].append(fight_obj_name)
+                    fight_obj = self._add_trigger(fight_obj_name)
+                    fight_obj.enabled = False
+                    fight_obj.display_as_objective = True
+                    fight_obj.display_on_screen = True
+                    fight_obj.description_order = 50
+                    fight_obj.short_description = fight_obj_text
+                    fight_obj.description = fight_obj_text
+                    fight_obj.mute_objectives = True
+                    util_triggers.add_cond_gaia_defeated(fight_obj)
+
+    def _add_minigame_objective(self, mg: event.Game, index: int):
+        """
+        Adds the objectives corresponding to minigame mg to the
+        index of _round_objectives.
+
+        Checks _round_objective[index] contains an empty list.
+        """
+        assert self._round_objectives[index] == []
+
+        if mg == event.Game.castle_siege:
+            self._add_castle_siege_objectives(index)
+        # TODO implement.
+
+    def _add_castle_siege_objectives(self, index: int):
+        """Adds the objectives for the Castle Siege minigame."""
+        pass
 
     def _add_victory_conditions(self):
         """
@@ -664,11 +690,106 @@ class ScnData:
         Copies the units from the fight data and adds triggers for each
         round of units.
         """
-        for index, f in enumerate(self._fights):
-            self._add_trigger_header(
-                f'Fight {index}' if index else 'Tiebreaker')
-            self._add_fight(index, f)
+        for index, e in enumerate(self._events):
+            if isinstance(e, Minigame):
+                self._add_trigger_header(f'Minigame {index}')
+                self._add_minigame(index, e)
+            else:
+                self._add_trigger_header(
+                    f'Fight {index}' if index else 'Tiebreaker')
+                self._add_fight(index, e)
 
+    def _add_minigame(self, index: int, m: Minigame) -> None:
+        """Adds the minigame with the given index."""
+        pass # TODO implement
+
+    def _add_fight(self, index: int, f: Fight) -> None:
+        """Adds the fight with the given index."""
+        # TODO map revealer minigame transitions
+        prefix = f'[R{index}]' if index else '[T]'
+        if index:
+            init_name = f'{prefix} Initialize Round'
+        else:
+            init_name = TIEBREAKER_INIT_NAME
+        begin_name = f'{prefix} Begin Round'
+        p1_wins_name = f'{prefix} Player 1 Wins Round'
+        p2_wins_name = f'{prefix} Player 2 Wins Round'
+        cleanup_name = f'{prefix} Cleanup Round'
+        increment_name = f'{prefix} Increment Round'
+
+        init = self._add_trigger(init_name)
+        if index:
+            init_var = init.add_condition(conditions.variable_value)
+            init_var.amount_or_quantity = index
+            init_var.variable = self._var_ids['round']
+            init_var.comparison = VarValComp.equal.value
+            if index == 1:
+                self._add_activate(init_name, ROUND_OBJ_NAME)
+                self._add_activate(init_name, REVEALER_CREATE_NAME)
+            obj_names = self._round_objectives[index]
+            for obj_name in obj_names:
+                self._add_activate(init_name, obj_name)
+        else:
+            # Disables the tiebreaker. The tiebreak launches only when
+            # enabled manually.
+            init.enabled = False
+            self._add_activate(init_name, TIEBREAKER_OBJ_NAME)
+        self._add_activate(init_name, begin_name)
+
+        for player in (1, 2, 3):
+            for tech_name in f.techs:
+                tech_id = util_techs.TECH_IDS[tech_name]
+                util_triggers.add_effect_research_tech(init, tech_id, player)
+
+        for player in (1, 2):
+            change_view = init.add_effect(effects.change_view)
+            change_view.player_source = player
+            change_view.location_x = FIGHT_CENTER_X
+            change_view.location_y = FIGHT_CENTER_Y
+
+        begin = self._add_trigger(begin_name)
+        begin.enabled = False
+        util_triggers.add_cond_timer(begin, DELAY_ROUND_BEFORE)
+
+        p1_wins = self._add_trigger(p1_wins_name)
+        self._add_deactivate(p1_wins_name, p2_wins_name)
+        self._add_activate(p1_wins_name, cleanup_name)
+        self._add_effect_p1_score(p1_wins, self._events[index].p1_bonus)
+        p2_wins = self._add_trigger(p2_wins_name)
+        self._add_deactivate(p2_wins_name, p1_wins_name)
+        self._add_activate(p2_wins_name, cleanup_name)
+        self._add_effect_p2_score(p2_wins, self._events[index].p2_bonus)
+
+        cleanup = self._add_trigger(cleanup_name)
+        cleanup.enabled = False
+        self._add_activate(cleanup_name, increment_name)
+        if index == self.num_rounds:
+            self._add_deactivate(cleanup_name, ROUND_OBJ_NAME)
+
+        increment_round = self._add_trigger(increment_name)
+        increment_round.enabled = False
+        util_triggers.add_cond_timer(increment_round, DELAY_ROUND_AFTER)
+        if index:
+            change_round = increment_round.add_effect(effects.change_variable)
+            change_round.quantity = 1
+            change_round.operation = ChangeVarOp.add.value
+            change_round.from_variable = self._var_ids['round']
+            change_round.message = 'round'
+            obj_names = self._round_objectives[index]
+            for obj_name in obj_names:
+                self._add_deactivate(cleanup_name, obj_name)
+        else:
+            # The tiebreaker activates checking the winner, rather than
+            # changing the round.
+            self._add_deactivate(increment_name, TIEBREAKER_OBJ_NAME)
+            self._add_activate(increment_name, CHECK_WINNER_NAME)
+
+        for unit in f.p1_units:
+            self._add_unit(index, unit, 1, init, begin, p1_wins, p2_wins,
+                           cleanup)
+        for unit in f.p2_units:
+            self._add_unit(index, unit, 2, init, begin, p1_wins, p2_wins,
+                           cleanup)
 
     def _add_unit(self, fight_index: int, unit: UnitStruct, from_player: int,
                   init: TriggerObject, begin: TriggerObject,
@@ -703,7 +824,7 @@ class ScnData:
 
         # Changes points (using the player number).
         unit_name = util_units.get_name(u)
-        pts = self._fights[fight_index].points[unit_name]
+        pts = self._events[fight_index].points[unit_name]
         prefix = f'[R{fight_index}]' if fight_index else '[T]'
         pretty_name = util.pretty_print_name(unit_name)
         change_pts_name = f'{prefix} P{from_player} loses {pretty_name} ({uid})'
@@ -719,89 +840,6 @@ class ScnData:
             util_triggers.add_cond_destroy_obj(p1_wins, uid)
             self._add_deactivate(p2_wins.name.rstrip('\x00'), change_pts_name)
         util_triggers.add_effect_remove_obj(cleanup, uid, from_player)
-
-    def _add_fight(self, index: int, f: Fight) -> None:
-        """Adds the fight with the given index."""
-        prefix = f'[R{index}]' if index else '[T]'
-        if index:
-            init_name = f'{prefix} Initialize Round'
-        else:
-            init_name = TIEBREAKER_INIT_NAME
-        begin_name = f'{prefix} Begin Round'
-        p1_wins_name = f'{prefix} Player 1 Wins Round'
-        p2_wins_name = f'{prefix} Player 2 Wins Round'
-        cleanup_name = f'{prefix} Cleanup Round'
-        increment_name = f'{prefix} Increment Round'
-
-        init = self._add_trigger(init_name)
-        if index:
-            init_var = init.add_condition(conditions.variable_value)
-            init_var.amount_or_quantity = index
-            init_var.variable = self._var_ids['round']
-            init_var.comparison = VarValComp.equal.value
-            if index == 1:
-                self._add_activate(init_name, ROUND_OBJ_NAME)
-                self._add_activate(init_name, REVEALER_CREATE_NAME)
-            self._add_activate(init_name, self._round_objective[index])
-        else:
-            # Disables the tiebreaker. The tiebreak launches only when
-            # enabled manually.
-            init.enabled = False
-            self._add_activate(init_name, TIEBREAKER_OBJ_NAME)
-        self._add_activate(init_name, begin_name)
-
-        for player in (1, 2, 3):
-            for tech_name in f.techs:
-                tech_id = util_techs.TECH_IDS[tech_name]
-                util_triggers.add_effect_research_tech(init, tech_id, player)
-
-        for player in (1, 2):
-            change_view = init.add_effect(effects.change_view)
-            change_view.player_source = player
-            change_view.location_x = FIGHT_CENTER_X
-            change_view.location_y = FIGHT_CENTER_Y
-
-        begin = self._add_trigger(begin_name)
-        begin.enabled = False
-        util_triggers.add_cond_timer(begin, DELAY_ROUND_BEFORE)
-
-        p1_wins = self._add_trigger(p1_wins_name)
-        self._add_deactivate(p1_wins_name, p2_wins_name)
-        self._add_activate(p1_wins_name, cleanup_name)
-        self._add_effect_p1_score(p1_wins, self._fights[index].p1_bonus)
-        p2_wins = self._add_trigger(p2_wins_name)
-        self._add_deactivate(p2_wins_name, p1_wins_name)
-        self._add_activate(p2_wins_name, cleanup_name)
-        self._add_effect_p2_score(p2_wins, self._fights[index].p2_bonus)
-
-        cleanup = self._add_trigger(cleanup_name)
-        cleanup.enabled = False
-        self._add_activate(cleanup_name, increment_name)
-        if index == self.num_rounds:
-            self._add_deactivate(cleanup_name, ROUND_OBJ_NAME)
-
-        increment_round = self._add_trigger(increment_name)
-        increment_round.enabled = False
-        util_triggers.add_cond_timer(increment_round, DELAY_ROUND_AFTER)
-        if index:
-            change_round = increment_round.add_effect(effects.change_variable)
-            change_round.quantity = 1
-            change_round.operation = ChangeVarOp.add.value
-            change_round.from_variable = self._var_ids['round']
-            change_round.message = 'round'
-            self._add_deactivate(cleanup_name, self._round_objective[index])
-        else:
-            # The tiebreaker activates checking the winner, rather than
-            # changing the round.
-            self._add_deactivate(increment_name, TIEBREAKER_OBJ_NAME)
-            self._add_activate(increment_name, CHECK_WINNER_NAME)
-
-        for unit in f.p1_units:
-            self._add_unit(index, unit, 1, init, begin, p1_wins, p2_wins,
-                           cleanup)
-        for unit in f.p2_units:
-            self._add_unit(index, unit, 2, init, begin, p1_wins, p2_wins,
-                           cleanup)
 
 
 def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
