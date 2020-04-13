@@ -354,7 +354,6 @@ class ScnData:
         Adds triggers for informing players if the correct AI script
         is not loaded.
         """
-        # self._add_trigger_header('AI')
         # AI signals do not work in multiplayer on DE.
         # If they do get fixed, this method should create three triggers:
         # 1. Declare AI Victory
@@ -368,7 +367,37 @@ class ScnData:
         # 3. AI Script Loaded
         #    * Condition: AI Signal 0
         #    * Disable Trigger: AI Script Not Loaded
-        pass
+        # In lieu of this feature, we create a workaround by adding stone
+        # to the AI player and using an Accumulate Attribute condition to
+        # disable the message and declare victory triggers.
+        self._add_trigger_header('AI')
+        ai_victory_name = '[AI] Declare AI Victory'
+        ai_not_loaded_name = '[AI] AI Script not Loaded'
+        ai_loaded_name = '[AI] Script Loaded'
+
+        ai_victory = self._add_trigger(ai_victory_name)
+        ai_victory.enabled = False
+        util_triggers.add_cond_timer(ai_victory, 10)
+        ai_declare_winner = ai_victory.add_effect(effects.declare_victory)
+        ai_declare_winner.player_source = 3
+
+        ai_not_loaded = self._add_trigger(ai_not_loaded_name)
+        util_triggers.add_cond_timer(ai_not_loaded, 5)
+        self._add_activate(ai_not_loaded_name, ai_victory_name)
+        ai_msg = ai_not_loaded.add_effect(effects.display_instructions)
+        ai_msg.player_source = 3
+        ai_msg.message = 'Micro Wars AI Script is not Loaded'
+        ai_msg.display_time = 10
+        ai_msg.play_sound = False
+        ai_msg.sound_name = '\x00'
+        ai_msg.string_id = -1
+
+        ai_loaded = self._add_trigger(ai_loaded_name)
+        stone_2197 = ai_loaded.add_condition(conditions.accumulate_attribute)
+        stone_2197.amount_or_quantity = 2197
+        stone_2197.resource_type_or_tribute_list = 2 # TODO make enum
+        stone_2197.player = 3
+        self._add_deactivate(ai_loaded_name, ai_not_loaded_name)
 
     def _add_initial_triggers(self) -> None:
         """

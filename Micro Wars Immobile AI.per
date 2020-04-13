@@ -63,13 +63,22 @@
 ;
 ;Thank you for your interest in the Immobile Units AI GOLD!
 
-;ai signal 0
+; Tributes 2197 stone to the AI in lieu of an AI Signal.
 (defrule
   (true)
   =>
-  (set-signal 0)
+  (cc-add-resource stone 2197)
   (disable-self)
 )
+
+; AI Signals do not work in DE multiplayer.
+; ai signal 0
+;(defrule
+;  (true)
+;  =>
+;  (set-signal 0)
+;  (disable-self)
+;)
 
 ;villagers
 (defrule
