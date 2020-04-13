@@ -836,6 +836,18 @@ class ScnData:
         for obj_name in obj_names:
             self._add_activate(init_name, obj_name)
         self._add_activate(init_name, begin_name)
+        p1_stone = init.add_effect(effects.modify_resource)
+        p1_stone.quantity = 650 # TODO magic number
+        p1_stone.tribute_list = 2 # TODO magic number
+        p1_stone.player_source = 1
+        p1_stone.item_id = -1
+        p1_stone.operation = ChangeVarOp.set_op.value # TODO rename enum
+        p2_stone = init.add_effect(effects.modify_resource)
+        p2_stone.quantity = 650 # TODO magic number
+        p2_stone.tribute_list = 2 # TODO magic number
+        p2_stone.player_source = 2
+        p2_stone.item_id = -1
+        p2_stone.operation = ChangeVarOp.set_op.value # TODO rename enum
 
         # TODO research minigame techs
 
@@ -866,6 +878,7 @@ class ScnData:
             unit_player_pairs.append((uid, player_target))
 
         # Cleanup
+        # TODO remove stone
 
         # p2 loses castle
         p2_loses_castle = self._add_trigger(p2_loses_castle_name)
