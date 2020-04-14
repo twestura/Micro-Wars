@@ -32,6 +32,7 @@ GNU General Public License v3.0: See the LICENSE file.
 import argparse
 from collections import defaultdict
 from enum import Enum
+import math
 from typing import Dict, List, Set
 from bidict import bidict
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
@@ -663,8 +664,8 @@ class ScnData:
             for flag_a in units_in_area
             if util_units.get_unit_constant(flag_a) == FLAG_A_ID
         ]
-        x1, y1 = util.min_point(flag_positions)
-        x2, y2 = util.max_point(flag_positions)
+        x1, y1 = (math.floor(pos) for pos in util.min_point(flag_positions))
+        x2, y2 = (math.ceil(pos) for pos in util.max_point(flag_positions))
 
         obj_daut_p1_name = f'[O] DauT Castle Player 1 Castle Constructed'
         self._round_objectives[index].append(obj_daut_p1_name)
@@ -696,7 +697,7 @@ class ScnData:
         p2_castle_in_area.amount_or_quantity = 1
         p2_castle_in_area.player = 2
         p2_castle_in_area.object_list = 82 # TODO remove Castle magic number
-        # util_triggers.set_cond_area(p2_castle_in_area, x1, y1, x2, y2)
+        util_triggers.set_cond_area(p2_castle_in_area, x1, y1, x2, y2)
 
     def _add_castle_siege_objectives(self, index: int):
         """Adds the objectives for the Castle Siege minigame."""
@@ -881,8 +882,7 @@ class ScnData:
         """Adds the minigame mg with the given index."""
         # TODO use enum instead of checking name
         if mg.name == 'DauT Castle':
-            # self._add_daut_castle(index)
-            pass
+            self._add_daut_castle(index)
         elif mg.name == 'Castle Siege':
             self._add_castle_siege(index)
         else:
@@ -978,8 +978,8 @@ class ScnData:
             if util_units.get_unit_constant(flag_a) == FLAG_A_ID
         ]
         # The min and max positions in which the Castle can be constructed.
-        x1, y1 = util.min_point(flag_positions)
-        x2, y2 = util.max_point(flag_positions)
+        x1, y1 = (math.floor(pos) for pos in util.min_point(flag_positions))
+        x2, y2 = (math.ceil(pos) for pos in util.max_point(flag_positions))
 
         # p1 constructs castle
         p1_builds_castle = self._add_trigger(p1_builds_castle_name)

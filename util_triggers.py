@@ -99,7 +99,6 @@ def set_cond_area(cond: ConditionObject,
     """
     Sets the area selected by cond to minimum (x1, y1) and maximum (x2, y2).
     """
-    print(f'Set Condition Area ({x1}, {y1}), ({x2}, {y2})')
     cond.area_1_x = x1
     cond.area_1_y = y1
     cond.area_2_x = x2
@@ -111,7 +110,6 @@ def set_effect_area(effect: EffectObject,
     """
     Sets the area selected by effect to minimum (x1, y1) and maximum (x2, y2).
     """
-    print(f'Set Effect Area ({x1}, {y1}), ({x2}, {y2})')
     effect.area_1_x = x1
     effect.area_1_y = y1
     effect.area_2_x = x2
