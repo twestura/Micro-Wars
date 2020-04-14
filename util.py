@@ -6,6 +6,7 @@ GNU General Public License v3.0: See the LICENSE file.
 
 
 import math
+from typing import List, Tuple
 
 
 def flip_angle_h(theta: float) -> float:
@@ -41,3 +42,27 @@ def pretty_print_name(name: str) -> str:
     For example, elite_chu_ko_nu -> Elite Chu Ko Nu.
     """
     return ' '.join(s[0].upper() + s[1:] for s in name.split('_'))
+
+
+def min_point(points: List[Tuple[int, int]]) -> Tuple[int, int]:
+    """
+    Returns the component-wise (min(x), min(y)) of the list of points,
+    or None if the list of points is empty.
+    """
+    if not points:
+        return None
+    x = min(a for a, __ in points)
+    y = min(b for __, b in points)
+    return x, y
+
+
+def max_point(points: List[Tuple[int, int]]) -> Tuple[int, int]:
+    """
+    Returns the component-wise maximum (max(x), max(y)) of the
+    list of points, or None if the list of points is empty.
+    """
+    if not points:
+        return None
+    x = max(a for a, __ in points)
+    y = max(b for __, b in points)
+    return x, y

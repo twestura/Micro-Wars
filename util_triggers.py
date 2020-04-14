@@ -6,6 +6,7 @@ GNU General Public License v3.0: See the LICENSE file.
 
 
 from AoE2ScenarioParser.datasets import conditions, effects
+from AoE2ScenarioParser.objects.effect_obj import EffectObject
 from AoE2ScenarioParser.objects.trigger_obj import TriggerObject
 
 
@@ -90,3 +91,13 @@ def add_effect_teleport(trigger: TriggerObject, unit_id: int,
     teleport.selected_object_id = unit_id
     teleport.location_x = x
     teleport.location_y = y
+
+
+def set_area(effect: EffectObject, x1: int, y1: int, x2: int, y2: int) -> None:
+    """
+    Sets the area selected by effect to minimum (x1, y1) and maximum (x2, y2).
+    """
+    effect.area_1_x = x1
+    effect.area_1_y = y1
+    effect.area_2_x = x2
+    effect.area_2_y = y2

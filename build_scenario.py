@@ -151,8 +151,12 @@ REVEALER_LOCATIONS = [
 ]
 
 
-# Trigger for creating map revealers.
-REVEALER_CREATE_NAME = '[I] Create Map Revealers'
+# Trigger name for creating map revealers for center fights.
+REVEALER_FIGHT_CREATE_NAME = '[I] Create Fight Map Revealers'
+
+
+# Trigger name for hiding map revealers for center fights.
+REVEALER_FIGHT_HIDE_NAME = '[I] Hide Fight Map Revealers'
 
 
 # Unit ID for Player 1's Castle in the Castle Siege minigame.
@@ -468,10 +472,11 @@ class ScnData:
         Loops and disables itself.
         Can be re-enabled to make additional map revealers.
         """
-        create_revealers = self._add_trigger(REVEALER_CREATE_NAME)
+        create_revealers = self._add_trigger(REVEALER_FIGHT_CREATE_NAME)
         create_revealers.enabled = False
         create_revealers.looping = True
-        self._add_deactivate(REVEALER_CREATE_NAME, REVEALER_CREATE_NAME)
+        self._add_deactivate(REVEALER_FIGHT_CREATE_NAME,
+                             REVEALER_FIGHT_CREATE_NAME)
         for player in (1, 2):
             for (x, y) in REVEALER_LOCATIONS:
                 create = create_revealers.add_effect(effects.create_object)
@@ -479,7 +484,17 @@ class ScnData:
                 create.player_source = player
                 create.location_x = x
                 create.location_y = y
-        # TODO map revealers for minigames
+
+        hide_revealers = self._add_trigger(REVEALER_FIGHT_HIDE_NAME)
+        hide_revealers.enabled = False
+        hide_revealers.looping = True
+        self._add_deactivate(REVEALER_FIGHT_HIDE_NAME, REVEALER_FIGHT_HIDE_NAME)
+        for player in (1, 2):
+            remove = hide_revealers.add_effect(effects.remove_object)
+            remove.player_source = player
+            x1, y1 = util.min_point(REVEALER_LOCATIONS)
+            x2, y2 = util.max_point(REVEALER_LOCATIONS)
+            util_triggers.set_area(remove, x1, y1, x2, y2)
 
     def _add_objectives(self) -> None:
         """
@@ -795,9 +810,12 @@ class ScnData:
                     f'Fight {index}' if index else 'Tiebreaker')
                 self._add_fight(index, e)
 
+    # TODO abstract out creating the init trigger
+    # or, more generally, abstract out creating the basic triggers
+    # Can return these triggers, then individual events add to them.
+
     def _add_minigame(self, index: int, mg: Minigame) -> None:
         """Adds the minigame mg with the given index."""
-        # TODO map revealer minigame transitions
         # TODO use enum instead of checking name
         if mg.name == 'Castle Siege':
             self._add_castle_siege(index)
@@ -830,8 +848,12 @@ class ScnData:
         init_var.comparison = VarValComp.equal.value
         if index == 1:
             self._add_activate(init_name, ROUND_OBJ_NAME)
-            # TODO transition minigame map revealers
-            self._add_activate(init_name, REVEALER_CREATE_NAME)
+
+        # Transitions map revealers.
+        # TODO make Castle Siege Map Revealers
+        # if index == 1 or isinstance(self._events[index-1], Minigame):
+        #     self._add_activate(init_name, REVEALER_FIGHT_CREATE_NAME)
+
         obj_names = self._round_objectives[index]
         for obj_name in obj_names:
             self._add_activate(init_name, obj_name)
@@ -987,7 +1009,9 @@ class ScnData:
             if index == 1:
                 self._add_activate(init_name, ROUND_OBJ_NAME)
                 # TODO transition minigame map revealers
-                self._add_activate(init_name, REVEALER_CREATE_NAME)
+            # Transitions map revealers.
+            if index == 1 or isinstance(self._events[index-1], Minigame):
+                self._add_activate(init_name, REVEALER_FIGHT_CREATE_NAME)
             obj_names = self._round_objectives[index]
             for obj_name in obj_names:
                 self._add_activate(init_name, obj_name)
@@ -1027,6 +1051,8 @@ class ScnData:
         self._add_activate(cleanup_name, increment_name)
         if index == self.num_rounds:
             self._add_deactivate(cleanup_name, ROUND_OBJ_NAME)
+        elif isinstance(self._events[index + 1], Minigame):
+            self._add_activate(cleanup_name, REVEALER_FIGHT_HIDE_NAME)
 
         increment_round = self._add_trigger(increment_name)
         increment_round.enabled = False

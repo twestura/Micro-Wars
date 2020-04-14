@@ -5,9 +5,12 @@ GNU General Public License v3.0: See the LICENSE file.
 """
 
 
+import math
 import random
 from nose.tools import assert_almost_equal, eq_, raises
-from util import * # pylint: disable=wildcard-import
+from util import (
+    flip_angle_h, pretty_print_name, min_point, max_point
+)
 
 
 @raises(ValueError)
@@ -94,3 +97,35 @@ def test_pretty_name1():
 
 def test_pretty_name2():
     eq_('Elite Chu Ko Nu', pretty_print_name('elite_chu_ko_nu'))
+
+
+def test_min_point0():
+    eq_(None, min_point([]))
+
+
+def test_min_point1():
+    eq_((5, 7), min_point([(5, 7)]))
+
+
+def test_min_point2():
+    eq_((5, 6), min_point([(5, 7), (6, 6)]))
+
+
+def test_min_point3():
+    eq_((0, 3), min_point([(5, 7), (6, 6), (0, 11), (23, 3), (5, 5)]))
+
+
+def test_max_point0():
+    eq_(None, max_point([]))
+
+
+def test_max_point1():
+    eq_((5, 7), max_point([(5, 7)]))
+
+
+def test_max_point2():
+    eq_((6, 7), max_point([(5, 7), (6, 6)]))
+
+
+def test_max_point3():
+    eq_((23, 11), max_point([(5, 7), (6, 6), (0, 11), (23, 3), (5, 5)]))
