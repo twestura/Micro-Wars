@@ -159,6 +159,10 @@ REVEALER_FIGHT_CREATE_NAME = '[I] Create Fight Map Revealers'
 REVEALER_FIGHT_HIDE_NAME = '[I] Hide Fight Map Revealers'
 
 
+# Unit ID of Flag A.
+FLAG_A_ID = 600
+
+
 # Unit ID for Player 1's Castle in the Castle Siege minigame.
 CS_P1_CASTLE_ID = 813
 
@@ -494,7 +498,7 @@ class ScnData:
             remove.player_source = player
             x1, y1 = util.min_point(REVEALER_LOCATIONS)
             x2, y2 = util.max_point(REVEALER_LOCATIONS)
-            util_triggers.set_area(remove, x1, y1, x2, y2)
+            util_triggers.set_effect_area(remove, x1, y1, x2, y2)
 
     def _add_objectives(self) -> None:
         """
@@ -628,12 +632,71 @@ class ScnData:
         Checks _round_objective[index] contains an empty list.
         """
         assert self._round_objectives[index] == []
-
-        if mg.name == 'Castle Siege':
-            self._add_castle_siege_objectives(index)
         # TODO implement other minigames.
+        if mg.name == 'DauT Castle':
+            self._add_daut_castle_objectives(index)
+        elif mg.name == 'Castle Siege':
+            self._add_castle_siege_objectives(index)
         else:
             raise AssertionError(f'Minigame {mg.name} not implemented.')
+
+    def _add_daut_castle_objectives(self, index: int):
+        """Adds the objectives for the DauT Castle minigame."""
+        obj_daut_name = f'[O] Round {index} DauT Castle'
+        self._round_objectives[index].append(obj_daut_name)
+        obj_daut = self._add_trigger(obj_daut_name)
+        obj_daut.enabled = False
+        obj_daut.description = "Build a Castle inside of the Flags, or defeat your opponent's army." # pylint: disable=line-too-long
+        obj_daut.short_description = 'Build a Castle inside of the Flags.'
+        obj_daut.display_as_objective = True
+        obj_daut.display_on_screen = True
+        obj_daut.description_order = 50
+        obj_daut.mute_objectives = True
+        util_triggers.add_cond_gaia_defeated(obj_daut)
+
+        # TODO Code is repeated later, refactor adding this condition.
+        p3_units = util_units.get_units_array(self._scn, 3)
+        # TODO remove magic numbers
+        units_in_area = util_units.units_in_area(p3_units, 0.0, 0.0, 80.0, 80.0)
+        flag_positions = [
+            (util_units.get_x(flag_a), util_units.get_y(flag_a))
+            for flag_a in units_in_area
+            if util_units.get_unit_constant(flag_a) == FLAG_A_ID
+        ]
+        x1, y1 = util.min_point(flag_positions)
+        x2, y2 = util.max_point(flag_positions)
+
+        obj_daut_p1_name = f'[O] DauT Castle Player 1 Castle Constructed'
+        self._round_objectives[index].append(obj_daut_p1_name)
+        obj_daut_p1 = self._add_trigger(obj_daut_p1_name)
+        obj_daut_p1.enabled = False
+        obj_daut_p1.description = '- Player 1 Castle Constructed'
+        obj_daut_p1.short_description = '- P1 Castle Constructed'
+        obj_daut_p1.display_as_objective = True
+        obj_daut_p1.display_on_screen = True
+        obj_daut_p1.description_order = 49
+        obj_daut_p1.mute_objectives = True
+        p1_castle_in_area = obj_daut_p1.add_condition(conditions.object_in_area)
+        p1_castle_in_area.amount_or_quantity = 1
+        p1_castle_in_area.player = 1
+        p1_castle_in_area.object_list = 82 # TODO remove Castle magic number
+        util_triggers.set_cond_area(p1_castle_in_area, x1, y1, x2, y2)
+
+        obj_daut_p2_name = f'[O] DauT Castle Player 2 Castle Constructed'
+        self._round_objectives[index].append(obj_daut_p2_name)
+        obj_daut_p2 = self._add_trigger(obj_daut_p2_name)
+        obj_daut_p2.enabled = False
+        obj_daut_p2.description = '- Player 2 Castle Constructed'
+        obj_daut_p2.short_description = '- P2 Castle Constructed'
+        obj_daut_p2.display_as_objective = True
+        obj_daut_p2.display_on_screen = True
+        obj_daut_p2.description_order = 48
+        obj_daut_p2.mute_objectives = True
+        p2_castle_in_area = obj_daut_p2.add_condition(conditions.object_in_area)
+        p2_castle_in_area.amount_or_quantity = 1
+        p2_castle_in_area.player = 2
+        p2_castle_in_area.object_list = 82 # TODO remove Castle magic number
+        # util_triggers.set_cond_area(p2_castle_in_area, x1, y1, x2, y2)
 
     def _add_castle_siege_objectives(self, index: int):
         """Adds the objectives for the Castle Siege minigame."""
@@ -817,10 +880,210 @@ class ScnData:
     def _add_minigame(self, index: int, mg: Minigame) -> None:
         """Adds the minigame mg with the given index."""
         # TODO use enum instead of checking name
-        if mg.name == 'Castle Siege':
+        if mg.name == 'DauT Castle':
+            # self._add_daut_castle(index)
+            pass
+        elif mg.name == 'Castle Siege':
             self._add_castle_siege(index)
         else:
             raise AssertionError(f'Minigame {mg.name} is not implemented.')
+
+    def _add_daut_castle(self, index: int) -> None:
+        """
+        Adds the DauT Castle minigame at the given index.
+
+        Checks the index is not 0 (cannot us a minigame as the tiebreaker).
+        """
+        assert index
+        prefix = f'[R{index}]' if index else '[T]'
+        init_name = f'{prefix} Initialize Round'
+        begin_name = f'{prefix} Begin Round'
+        p1_wins_name = f'{prefix} Player 1 Wins Round'
+        p1_builds_castle_name = f'{prefix} Player 1 Constructs Castle'
+        p1_loses_army_name = f'{prefix} Player 1 Loses Army'
+        p2_wins_name = f'{prefix} Player 2 Wins Round'
+        p2_builds_castle_name = f'{prefix} Player 2 Constructs Castle'
+        p2_loses_army_name = f'{prefix} Player 2 Loses Army'
+        cleanup_name = f'{prefix} Cleanup Round'
+        increment_name = f'{prefix} Increment Round'
+
+        init = self._add_trigger(init_name)
+        init_var = init.add_condition(conditions.variable_value)
+        init_var.amount_or_quantity = index
+        init_var.variable = self._var_ids['round']
+        init_var.comparison = VarValComp.equal.value
+        if index == 1:
+            self._add_activate(init_name, ROUND_OBJ_NAME)
+
+        # Transitions map revealers.
+        # TODO make Castle Siege Map Revealers
+        # if index == 1 or isinstance(self._events[index-1], Minigame):
+        #     self._add_activate(init_name, REVEALER_FIGHT_CREATE_NAME)
+
+        obj_names = self._round_objectives[index]
+        for obj_name in obj_names:
+            self._add_activate(init_name, obj_name)
+        self._add_activate(init_name, begin_name)
+        p1_stone = init.add_effect(effects.modify_resource)
+        p1_stone.quantity = 1300 # TODO magic number
+        p1_stone.tribute_list = 2 # TODO magic number
+        p1_stone.player_source = 1
+        p1_stone.item_id = -1
+        p1_stone.operation = ChangeVarOp.set_op.value # TODO rename enum
+        p2_stone = init.add_effect(effects.modify_resource)
+        p2_stone.quantity = 1300 # TODO magic number
+        p2_stone.tribute_list = 2 # TODO magic number
+        p2_stone.player_source = 2
+        p2_stone.item_id = -1
+        p2_stone.operation = ChangeVarOp.set_op.value # TODO rename enum
+
+        # TODO research minigame techs
+
+        for player in (1, 2):
+            change_view = init.add_effect(effects.change_view)
+            change_view.player_source = player
+            # TODO remove magic numbers
+            change_view.location_x = 40
+            change_view.location_y = 40
+
+        begin = self._add_trigger(begin_name)
+        begin.enabled = False
+        util_triggers.add_cond_timer(begin, DELAY_ROUND_BEFORE)
+
+        # Begin changes ownership.
+        p3_units = util_units.get_units_array(self._scn, 3)
+        # TODO remove magic numbers
+        daut_units = util_units.units_in_area(p3_units, 0.0, 0.0, 80.0, 80.0)
+        unit_player_pairs = []
+        for unit in daut_units:
+            # TODO handle flags separately
+            pos = util_units.get_x(unit) + util_units.get_y(unit)
+            player_target = 1 if pos < 80.0 else 2 # TODO remove magic number
+            change_to_player = begin.add_effect(effects.change_ownership)
+            change_to_player.number_of_units_selected = 1
+            change_to_player.player_source = 3
+            change_to_player.player_target = player_target
+            uid = util_units.get_id(unit)
+            change_to_player.selected_object_id = uid
+            unit_player_pairs.append((uid, player_target))
+
+        # Cleanup
+
+        p3_units = util_units.get_units_array(self._scn, 3)
+        # TODO remove magic numbers
+        units_in_area = util_units.units_in_area(p3_units, 0.0, 0.0, 80.0, 80.0)
+        flag_positions = [
+            (util_units.get_x(flag_a), util_units.get_y(flag_a))
+            for flag_a in units_in_area
+            if util_units.get_unit_constant(flag_a) == FLAG_A_ID
+        ]
+        # The min and max positions in which the Castle can be constructed.
+        x1, y1 = util.min_point(flag_positions)
+        x2, y2 = util.max_point(flag_positions)
+
+        # p1 constructs castle
+        p1_builds_castle = self._add_trigger(p1_builds_castle_name)
+        p1_c_cond = p1_builds_castle.add_condition(conditions.object_in_area)
+        p1_c_cond.amount_or_quantity = 1
+        p1_c_cond.player = 1
+        p1_c_cond.object_list = 82 # TODO remove Castle magic number
+        util_triggers.set_cond_area(p1_c_cond, x1, y1, x2, y2)
+        self._add_activate(p1_builds_castle_name, p1_wins_name)
+        self._add_deactivate(p1_builds_castle_name, p1_loses_army_name)
+        self._add_deactivate(p1_builds_castle_name, p2_builds_castle_name)
+        self._add_deactivate(p1_builds_castle_name, p2_loses_army_name)
+
+        # p2 loses army
+        p2_loses_army = self._add_trigger(p2_loses_army_name)
+        for unit in daut_units:
+            pos = util_units.get_x(unit) + util_units.get_y(unit)
+            uid = util_units.get_id(unit)
+            if pos >= 80.0 and uid != FLAG_A_ID:
+                p2_u_cond = p2_loses_army.add_condition(
+                    conditions.destroy_object)
+                p2_u_cond.unit_object = uid
+        self._add_activate(p2_loses_army_name, p1_wins_name)
+        self._add_deactivate(p2_loses_army_name, p1_builds_castle_name)
+        self._add_deactivate(p2_loses_army_name, p1_loses_army_name)
+        self._add_deactivate(p2_loses_army_name, p2_builds_castle_name)
+
+        # p1 wins
+        p1_wins = self._add_trigger(p1_wins_name)
+        p1_wins.enabled = False
+        self._add_effect_p1_score(p1_wins, event.MAX_POINTS)
+        self._add_activate(p1_wins_name, cleanup_name)
+
+        # p2 constructs castle
+        p2_builds_castle = self._add_trigger(p2_builds_castle_name)
+        p2_c_cond = p2_builds_castle.add_condition(conditions.object_in_area)
+        p2_c_cond.amount_or_quantity = 1
+        p2_c_cond.player = 1
+        p2_c_cond.object_list = 82 # TODO remove Castle magic number
+        util_triggers.set_cond_area(p2_c_cond, x1, y1, x2, y2)
+        self._add_activate(p2_builds_castle_name, p2_wins_name)
+        self._add_deactivate(p2_builds_castle_name, p2_loses_army_name)
+        self._add_deactivate(p2_builds_castle_name, p1_builds_castle_name)
+        self._add_deactivate(p2_builds_castle_name, p1_loses_army_name)
+
+        # p1 loses army
+        p1_loses_army = self._add_trigger(p1_loses_army_name)
+        for unit in daut_units:
+            pos = util_units.get_x(unit) + util_units.get_y(unit)
+            uid = util_units.get_id(unit)
+            if pos < 80.0 and uid != FLAG_A_ID:
+                p1_u_cond = p1_loses_army.add_condition(
+                    conditions.destroy_object)
+                p1_u_cond.unit_object = uid
+        self._add_activate(p1_loses_army_name, p2_wins_name)
+        self._add_deactivate(p1_loses_army_name, p2_builds_castle_name)
+        self._add_deactivate(p1_loses_army_name, p2_loses_army_name)
+        self._add_deactivate(p1_loses_army_name, p1_builds_castle_name)
+
+        # p2 wins
+        p2_wins = self._add_trigger(p2_wins_name)
+        p2_wins.enabled = False
+        self._add_effect_p2_score(p2_wins, event.MAX_POINTS)
+        self._add_activate(p2_wins_name, cleanup_name)
+
+        cleanup = self._add_trigger(cleanup_name)
+        cleanup.enabled = False
+        self._add_activate(cleanup_name, increment_name)
+        if index == self.num_rounds:
+            self._add_deactivate(cleanup_name, ROUND_OBJ_NAME)
+        # Cleanup removes units from player control.
+        for uid, player_source in unit_player_pairs:
+            change_from_player = cleanup.add_effect(effects.change_ownership)
+            change_from_player.number_of_units_selected = 1
+            change_from_player.player_source = player_source
+            change_from_player.player_target = 3
+            change_from_player.selected_object_id = uid
+
+        # Removes stone after round is over
+        p1_stone_remove = cleanup.add_effect(effects.modify_resource)
+        p1_stone_remove.quantity = 0 # TODO magic number
+        p1_stone_remove.tribute_list = 2 # TODO magic number
+        p1_stone_remove.player_source = 1
+        p1_stone_remove.item_id = -1
+        p1_stone_remove.operation = ChangeVarOp.set_op.value # TODO rename enum
+        p2_stone_remove = cleanup.add_effect(effects.modify_resource)
+        p2_stone_remove.quantity = 0 # TODO magic number
+        p2_stone_remove.tribute_list = 2 # TODO magic number
+        p2_stone_remove.player_source = 2
+        p2_stone_remove.item_id = -1
+        p2_stone_remove.operation = ChangeVarOp.set_op.value # TODO rename enum
+
+        increment_round = self._add_trigger(increment_name)
+        increment_round.enabled = False
+        util_triggers.add_cond_timer(increment_round, DELAY_ROUND_AFTER)
+
+        change_round = increment_round.add_effect(effects.change_variable)
+        change_round.quantity = 1
+        change_round.operation = ChangeVarOp.add.value
+        change_round.from_variable = self._var_ids['round']
+        change_round.message = 'round'
+        obj_names = self._round_objectives[index]
+        for obj_name in obj_names:
+            self._add_deactivate(cleanup_name, obj_name)
 
     def _add_castle_siege(self, index: int) -> None:
         """
@@ -900,7 +1163,6 @@ class ScnData:
             unit_player_pairs.append((uid, player_target))
 
         # Cleanup
-        # TODO remove stone
 
         # p2 loses castle
         p2_loses_castle = self._add_trigger(p2_loses_castle_name)
@@ -920,7 +1182,7 @@ class ScnData:
                 p2_u_cond = p2_loses_army.add_condition(
                     conditions.destroy_object)
                 p2_u_cond.unit_object = uid
-        self._add_activate(p2_loses_army_name, p2_wins_name)
+        self._add_activate(p2_loses_army_name, p1_wins_name)
         self._add_deactivate(p2_loses_army_name, p1_loses_castle_name)
         self._add_deactivate(p2_loses_army_name, p1_loses_army_name)
         self._add_deactivate(p2_loses_army_name, p2_loses_castle_name)
@@ -949,7 +1211,7 @@ class ScnData:
                 p1_u_cond = p1_loses_army.add_condition(
                     conditions.destroy_object)
                 p1_u_cond.unit_object = uid
-        self._add_activate(p1_loses_army_name, p1_wins_name)
+        self._add_activate(p1_loses_army_name, p2_wins_name)
         self._add_deactivate(p1_loses_army_name, p2_loses_castle_name)
         self._add_deactivate(p1_loses_army_name, p2_loses_army_name)
         self._add_deactivate(p1_loses_army_name, p1_loses_castle_name)
@@ -972,6 +1234,20 @@ class ScnData:
             change_from_player.player_source = player_source
             change_from_player.player_target = 3
             change_from_player.selected_object_id = uid
+
+        # Removes stone after round is over
+        p1_stone_remove = cleanup.add_effect(effects.modify_resource)
+        p1_stone_remove.quantity = 0 # TODO magic number
+        p1_stone_remove.tribute_list = 2 # TODO magic number
+        p1_stone_remove.player_source = 1
+        p1_stone_remove.item_id = -1
+        p1_stone_remove.operation = ChangeVarOp.set_op.value # TODO rename enum
+        p2_stone_remove = cleanup.add_effect(effects.modify_resource)
+        p2_stone_remove.quantity = 0 # TODO magic number
+        p2_stone_remove.tribute_list = 2 # TODO magic number
+        p2_stone_remove.player_source = 2
+        p2_stone_remove.item_id = -1
+        p2_stone_remove.operation = ChangeVarOp.set_op.value # TODO rename enum
 
         increment_round = self._add_trigger(increment_name)
         increment_round.enabled = False
