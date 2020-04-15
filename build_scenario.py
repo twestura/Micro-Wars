@@ -304,7 +304,47 @@ class _RoundTriggers:
             self._scn._add_activate(self.names.init, REVEALER_FIGHT_CREATE_NAME)
 
         self._scn._add_activate(self.names.init, self.names.begin)
-        # TODO implement
+
+        self._begin = self._scn._add_trigger(self.names.begin)
+        self._begin.enabled = False
+        util_triggers.add_cond_timer(self._begin, DELAY_ROUND_BEFORE)
+
+        # TODO think more about how to structure p1 and p2 wins triggers
+        self._p1_wins = self._scn._add_trigger(self.names.p1_wins)
+        self._p2_wins = self._scn._add_trigger(self.names.p2_wins)
+
+        self._cleanup = self._scn._add_trigger(self.names.cleanup)
+        self._cleanup.enabled = False
+        self._scn._add_activate(self.names.cleanup, self.names.inc)
+        # Disables the Round N/N counter for the final round.
+        # TODO should the objective be removed later, to avoid gaps and to
+        # show completed objectives for minigames?
+        if index == self._scn.num_rounds:
+            self._scn._add_deactivate(self.names.cleanup, ROUND_OBJ_NAME)
+        # TODO handle map revealers for minigames
+        elif isinstance(self._scn._events[index + 1], Minigame):
+            self._scn._add_activate(self.names.cleanup,
+                                    REVEALER_FIGHT_HIDE_NAME)
+        # Deactivates round-specific objectives
+        obj_names = self._scn._round_objectives[index]
+        for obj_name in obj_names:
+            self._scn._add_deactivate(self.names.cleanup, obj_name)
+
+        self._inc = self._scn._add_trigger(self.names.inc)
+        self._inc.enabled = False
+        util_triggers.add_cond_timer(self._inc, DELAY_ROUND_AFTER)
+
+        if index:
+            change_round = self._inc.add_effect(effects.change_variable)
+            change_round.quantity = 1
+            change_round.operation = ChangeVarOp.add.value
+            change_round.from_variable = self._scn._var_ids['round']
+            change_round.message = 'round'
+        else:
+            # The tiebreaker activates checking the winner, rather than
+            # changing the round.
+            self._scn._add_deactivate(self.names.inc, TIEBREAKER_OBJ_NAME)
+            self._scn._add_activate(self.names.inc, CHECK_WINNER_NAME)
 
     @property
     def index(self):
@@ -320,6 +360,31 @@ class _RoundTriggers:
     def init(self):
         """Returns the init trigger."""
         return self._init
+
+    @property
+    def begin(self):
+        """Returns the begin trigger."""
+        return self._begin
+
+    @property
+    def p1_wins(self):
+        """Returns the p1 wins trigger."""
+        return self._p1_wins
+
+    @property
+    def p2_wins(self):
+        """Returns the p2 wins trigger."""
+        return self._p2_wins
+
+    @property
+    def cleanup(self):
+        """Returns the cleanup trigger."""
+        return self._cleanup
+
+    @property
+    def inc(self):
+        """Returns the round increment trigger."""
+        return self._inc
 
     def __str__(self):
         return f'Triggers for round {self.index}.'
@@ -1046,6 +1111,7 @@ class ScnData:
         # if index == 1 or isinstance(self._events[index-1], Minigame):
         #     self._add_activate(init_name, REVEALER_FIGHT_CREATE_NAME)
 
+        # TODO refactor setting resources
         p1_stone = rts.init.add_effect(effects.modify_resource)
         p1_stone.quantity = 1300 # TODO magic number
         p1_stone.tribute_list = 2 # TODO magic number
@@ -1061,16 +1127,13 @@ class ScnData:
 
         # TODO research minigame techs
 
+        # TODO refactor changing view
         for player in (1, 2):
             change_view = rts.init.add_effect(effects.change_view)
             change_view.player_source = player
             # TODO remove magic numbers
             change_view.location_x = 40
             change_view.location_y = 40
-
-        begin = self._add_trigger(rts.names.begin)
-        begin.enabled = False
-        util_triggers.add_cond_timer(begin, DELAY_ROUND_BEFORE)
 
         # Begin changes ownership.
         p3_units = util_units.get_units_array(self._scn, 3)
@@ -1081,15 +1144,13 @@ class ScnData:
             # TODO handle flags separately
             pos = util_units.get_x(unit) + util_units.get_y(unit)
             player_target = 1 if pos < 80.0 else 2 # TODO remove magic number
-            change_to_player = begin.add_effect(effects.change_ownership)
+            change_to_player = rts.begin.add_effect(effects.change_ownership)
             change_to_player.number_of_units_selected = 1
             change_to_player.player_source = 3
             change_to_player.player_target = player_target
             uid = util_units.get_id(unit)
             change_to_player.selected_object_id = uid
             unit_player_pairs.append((uid, player_target))
-
-        # Cleanup
 
         p3_units = util_units.get_units_array(self._scn, 3)
         # TODO remove magic numbers
@@ -1130,9 +1191,8 @@ class ScnData:
         self._add_deactivate(p2_loses_army_name, p2_builds_castle_name)
 
         # p1 wins
-        p1_wins = self._add_trigger(p1_wins_name)
-        p1_wins.enabled = False
-        self._add_effect_p1_score(p1_wins, event.MAX_POINTS)
+        rts.p1_wins.enabled = False
+        self._add_effect_p1_score(rts.p1_wins, event.MAX_POINTS)
         self._add_activate(p1_wins_name, rts.names.cleanup)
 
         # p2 constructs castle
@@ -1162,50 +1222,32 @@ class ScnData:
         self._add_deactivate(p1_loses_army_name, p1_builds_castle_name)
 
         # p2 wins
-        p2_wins = self._add_trigger(p2_wins_name)
-        p2_wins.enabled = False
-        self._add_effect_p2_score(p2_wins, event.MAX_POINTS)
+        rts.p2_wins.enabled = False
+        self._add_effect_p2_score(rts.p2_wins, event.MAX_POINTS)
         self._add_activate(p2_wins_name, rts.names.cleanup)
 
-        cleanup = self._add_trigger(rts.names.cleanup)
-        cleanup.enabled = False
-        self._add_activate(rts.names.cleanup, rts.names.inc)
-        if index == self.num_rounds:
-            self._add_deactivate(rts.names.cleanup, ROUND_OBJ_NAME)
         # Cleanup removes units from player control.
         for uid, player_source in unit_player_pairs:
-            change_from_player = cleanup.add_effect(effects.change_ownership)
+            change_from_player = rts.cleanup.add_effect(
+                effects.change_ownership)
             change_from_player.number_of_units_selected = 1
             change_from_player.player_source = player_source
             change_from_player.player_target = 3
             change_from_player.selected_object_id = uid
 
         # Removes stone after round is over
-        p1_stone_remove = cleanup.add_effect(effects.modify_resource)
+        p1_stone_remove = rts.cleanup.add_effect(effects.modify_resource)
         p1_stone_remove.quantity = 0 # TODO magic number
         p1_stone_remove.tribute_list = 2 # TODO magic number
         p1_stone_remove.player_source = 1
         p1_stone_remove.item_id = -1
         p1_stone_remove.operation = ChangeVarOp.set_op.value # TODO rename enum
-        p2_stone_remove = cleanup.add_effect(effects.modify_resource)
+        p2_stone_remove = rts.cleanup.add_effect(effects.modify_resource)
         p2_stone_remove.quantity = 0 # TODO magic number
         p2_stone_remove.tribute_list = 2 # TODO magic number
         p2_stone_remove.player_source = 2
         p2_stone_remove.item_id = -1
         p2_stone_remove.operation = ChangeVarOp.set_op.value # TODO rename enum
-
-        increment_round = self._add_trigger(rts.names.inc)
-        increment_round.enabled = False
-        util_triggers.add_cond_timer(increment_round, DELAY_ROUND_AFTER)
-
-        change_round = increment_round.add_effect(effects.change_variable)
-        change_round.quantity = 1
-        change_round.operation = ChangeVarOp.add.value
-        change_round.from_variable = self._var_ids['round']
-        change_round.message = 'round'
-        obj_names = self._round_objectives[index]
-        for obj_name in obj_names:
-            self._add_deactivate(rts.names.cleanup, obj_name)
 
     def _add_castle_siege(self, index: int) -> None:
         """
@@ -1248,9 +1290,7 @@ class ScnData:
             change_view.location_x = 120
             change_view.location_y = 40
 
-        begin = self._add_trigger(rts.names.begin)
-        begin.enabled = False
-        util_triggers.add_cond_timer(begin, DELAY_ROUND_BEFORE)
+        # TODO refactor splitting ownership down the middle
         # Begin changes ownership
         p3_units = util_units.get_units_array(self._scn, 3)
         # TODO remove magic numbers
@@ -1259,15 +1299,13 @@ class ScnData:
         for unit in cs_units:
             pos = util_units.get_x(unit) + util_units.get_y(unit)
             player_target = 1 if pos < 160.0 else 2 # TODO remove magic number
-            change_to_player = begin.add_effect(effects.change_ownership)
+            change_to_player = rts.begin.add_effect(effects.change_ownership)
             change_to_player.number_of_units_selected = 1
             change_to_player.player_source = 3
             change_to_player.player_target = player_target
             uid = util_units.get_id(unit)
             change_to_player.selected_object_id = uid
             unit_player_pairs.append((uid, player_target))
-
-        # Cleanup
 
         # p2 loses castle
         p2_loses_castle = self._add_trigger(p2_loses_castle_name)
@@ -1293,9 +1331,8 @@ class ScnData:
         self._add_deactivate(p2_loses_army_name, p2_loses_castle_name)
 
         # p1 wins
-        p1_wins = self._add_trigger(rts.names.p1_wins)
-        p1_wins.enabled = False
-        self._add_effect_p1_score(p1_wins, event.MAX_POINTS)
+        rts.p1_wins.enabled = False
+        self._add_effect_p1_score(rts.p1_wins, event.MAX_POINTS)
         self._add_activate(rts.names.p1_wins, rts.names.cleanup)
 
         # p1 loses castle
@@ -1322,50 +1359,32 @@ class ScnData:
         self._add_deactivate(p1_loses_army_name, p1_loses_castle_name)
 
         # p2 wins
-        p2_wins = self._add_trigger(rts.names.p2_wins)
-        p2_wins.enabled = False
-        self._add_effect_p2_score(p2_wins, event.MAX_POINTS)
+        rts.p2_wins.enabled = False
+        self._add_effect_p2_score(rts.p2_wins, event.MAX_POINTS)
         self._add_activate(rts.names.p2_wins, rts.names.cleanup)
 
-        cleanup = self._add_trigger(rts.names.cleanup)
-        cleanup.enabled = False
-        self._add_activate(rts.names.cleanup, rts.names.inc)
-        if index == self.num_rounds:
-            self._add_deactivate(rts.names.cleanup, ROUND_OBJ_NAME)
         # Cleanup removes units from player control.
         for uid, player_source in unit_player_pairs:
-            change_from_player = cleanup.add_effect(effects.change_ownership)
+            change_from_player = rts.cleanup.add_effect(
+                effects.change_ownership)
             change_from_player.number_of_units_selected = 1
             change_from_player.player_source = player_source
             change_from_player.player_target = 3
             change_from_player.selected_object_id = uid
 
         # Removes stone after round is over
-        p1_stone_remove = cleanup.add_effect(effects.modify_resource)
+        p1_stone_remove = rts.cleanup.add_effect(effects.modify_resource)
         p1_stone_remove.quantity = 0 # TODO magic number
         p1_stone_remove.tribute_list = 2 # TODO magic number
         p1_stone_remove.player_source = 1
         p1_stone_remove.item_id = -1
         p1_stone_remove.operation = ChangeVarOp.set_op.value # TODO rename enum
-        p2_stone_remove = cleanup.add_effect(effects.modify_resource)
+        p2_stone_remove = rts.cleanup.add_effect(effects.modify_resource)
         p2_stone_remove.quantity = 0 # TODO magic number
         p2_stone_remove.tribute_list = 2 # TODO magic number
         p2_stone_remove.player_source = 2
         p2_stone_remove.item_id = -1
         p2_stone_remove.operation = ChangeVarOp.set_op.value # TODO rename enum
-
-        increment_round = self._add_trigger(rts.names.inc)
-        increment_round.enabled = False
-        util_triggers.add_cond_timer(increment_round, DELAY_ROUND_AFTER)
-
-        change_round = increment_round.add_effect(effects.change_variable)
-        change_round.quantity = 1
-        change_round.operation = ChangeVarOp.add.value
-        change_round.from_variable = self._var_ids['round']
-        change_round.message = 'round'
-        obj_names = self._round_objectives[index]
-        for obj_name in obj_names:
-            self._add_deactivate(rts.names.cleanup, obj_name)
 
     def _add_fight(self, index: int, f: Fight) -> None:
         """Adds the fight with the given index."""
@@ -1383,56 +1402,21 @@ class ScnData:
             change_view.location_x = FIGHT_CENTER_X
             change_view.location_y = FIGHT_CENTER_Y
 
-        begin = self._add_trigger(rts.names.begin)
-        begin.enabled = False
-        util_triggers.add_cond_timer(begin, DELAY_ROUND_BEFORE)
-
-        p1_wins = self._add_trigger(rts.names.p1_wins)
+        # TODO think more about how to structure p1 and p2 wins triggers
         self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
         self._add_activate(rts.names.p1_wins, rts.names.cleanup)
-        self._add_effect_p1_score(p1_wins, self._events[index].p1_bonus)
-        p2_wins = self._add_trigger(rts.names.p2_wins)
+        self._add_effect_p1_score(rts.p1_wins, self._events[index].p1_bonus)
         self._add_deactivate(rts.names.p2_wins, rts.names.p1_wins)
         self._add_activate(rts.names.p2_wins, rts.names.cleanup)
-        self._add_effect_p2_score(p2_wins, self._events[index].p2_bonus)
-
-        cleanup = self._add_trigger(rts.names.cleanup)
-        cleanup.enabled = False
-        self._add_activate(rts.names.cleanup, rts.names.inc)
-        if index == self.num_rounds:
-            self._add_deactivate(rts.names.cleanup, ROUND_OBJ_NAME)
-        elif isinstance(self._events[index + 1], Minigame):
-            self._add_activate(rts.names.cleanup, REVEALER_FIGHT_HIDE_NAME)
-
-        increment_round = self._add_trigger(rts.names.inc)
-        increment_round.enabled = False
-        util_triggers.add_cond_timer(increment_round, DELAY_ROUND_AFTER)
-        if index:
-            change_round = increment_round.add_effect(effects.change_variable)
-            change_round.quantity = 1
-            change_round.operation = ChangeVarOp.add.value
-            change_round.from_variable = self._var_ids['round']
-            change_round.message = 'round'
-            obj_names = self._round_objectives[index]
-            for obj_name in obj_names:
-                self._add_deactivate(rts.names.cleanup, obj_name)
-        else:
-            # The tiebreaker activates checking the winner, rather than
-            # changing the round.
-            self._add_deactivate(rts.names.inc, TIEBREAKER_OBJ_NAME)
-            self._add_activate(rts.names.inc, CHECK_WINNER_NAME)
+        self._add_effect_p2_score(rts.p2_wins, self._events[index].p2_bonus)
 
         for unit in f.p1_units:
-            self._add_unit(index, unit, 1, rts.init, begin, p1_wins, p2_wins,
-                           cleanup)
+            self._add_unit(index, unit, 1, rts)
         for unit in f.p2_units:
-            self._add_unit(index, unit, 2, rts.init, begin, p1_wins, p2_wins,
-                           cleanup)
+            self._add_unit(index, unit, 2, rts)
 
     def _add_unit(self, fight_index: int, unit: UnitStruct, from_player: int,
-                  init: TriggerObject, begin: TriggerObject,
-                  p1_wins: TriggerObject, p2_wins: TriggerObject,
-                  cleanup: TriggerObject) -> None:
+                  rts: _RoundTriggers) -> None:
         """
         Adds the unit from player `from_player` to the scenario.
         `fight_index` is the index of the fight in which the unit participates.
@@ -1449,7 +1433,7 @@ class ScnData:
         util_units.set_y(u, 0.5)
 
         # Init handles teleportation.
-        teleport = init.add_effect(effects.teleport_object)
+        teleport = rts.init.add_effect(effects.teleport_object)
         teleport.number_of_units_selected = 1
         teleport.player_source = 3
         teleport.selected_object_id = uid
@@ -1457,7 +1441,7 @@ class ScnData:
         teleport.location_y = util_units.get_y(unit)
 
         # Begin handles ownership changes.
-        change_own = begin.add_effect(effects.change_ownership)
+        change_own = rts.begin.add_effect(effects.change_ownership)
         change_own.number_of_units_selected = 1
         change_own.player_source = 3
         change_own.player_target = from_player
@@ -1474,13 +1458,13 @@ class ScnData:
         unit_killed.unit_object = uid
         if from_player == 1:
             self._add_effect_p2_score(change_pts, pts)
-            util_triggers.add_cond_destroy_obj(p2_wins, uid)
-            self._add_deactivate(p1_wins.name.rstrip('\x00'), change_pts_name)
+            util_triggers.add_cond_destroy_obj(rts.p2_wins, uid)
+            self._add_deactivate(rts.names.p1_wins, change_pts_name)
         else:
             self._add_effect_p1_score(change_pts, pts)
-            util_triggers.add_cond_destroy_obj(p1_wins, uid)
-            self._add_deactivate(p2_wins.name.rstrip('\x00'), change_pts_name)
-        util_triggers.add_effect_remove_obj(cleanup, uid, from_player)
+            util_triggers.add_cond_destroy_obj(rts.p1_wins, uid)
+            self._add_deactivate(rts.names.p2_wins, change_pts_name)
+        util_triggers.add_effect_remove_obj(rts.cleanup, uid, from_player)
 
 
 def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
