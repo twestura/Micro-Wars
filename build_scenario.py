@@ -586,7 +586,9 @@ class ScnData:
         e = self._events[index]
         if isinstance(e, Minigame):
             name = e.name
-            if name == 'DauT Castle':
+            if name == 'Galley Micro':
+                techs = ['fletching']
+            elif name == 'DauT Castle':
                 techs = ['loom', 'castle_age', 'crossbowman',
                          'elite_skirmisher', 'fletching', 'bodkin_arrow',
                          'sanctity', 'atonement', 'redemption']
@@ -882,7 +884,7 @@ class ScnData:
                     fight_obj.mute_objectives = True
                     util_triggers.add_cond_gaia_defeated(fight_obj)
 
-    def _add_minigame_objective(self, mg: Minigame, index: int):
+    def _add_minigame_objective(self, mg: Minigame, index: int) -> None:
         """
         Adds the objectives corresponding to minigame mg to the
         index of _round_objectives.
@@ -891,12 +893,28 @@ class ScnData:
         """
         assert self._round_objectives[index] == []
         # TODO implement other minigames.
-        if mg.name == 'DauT Castle':
+        if mg.name == 'Galley Micro':
+            self._add_galley_micro_objectives(index)
+        elif mg.name == 'DauT Castle':
             self._add_daut_castle_objectives(index)
         elif mg.name == 'Castle Siege':
             self._add_castle_siege_objectives(index)
         else:
             raise AssertionError(f'Minigame {mg.name} not implemented.')
+
+    def _add_galley_micro_objectives(self, index: int) -> None:
+        """Adds the objectives for the Galley Micro minigame"""
+        obj_galley_name = f'[O] Round {index} Galley Micro'
+        self._round_objectives[index].append(obj_galley_name)
+        obj_galley = self._add_trigger(obj_galley_name)
+        obj_galley.enabled = False
+        obj_galley.description = '* Galley: 10'
+        obj_galley.short_description = '* Galley: 10'
+        obj_galley.display_as_objective = True
+        obj_galley.display_on_screen = True
+        obj_galley.description_order = 50
+        obj_galley.mute_objectives = True
+        util_triggers.add_cond_gaia_defeated(obj_galley)
 
     def _add_daut_castle_objectives(self, index: int):
         """Adds the objectives for the DauT Castle minigame."""
@@ -1138,12 +1156,68 @@ class ScnData:
     def _add_minigame(self, index: int, mg: Minigame) -> None:
         """Adds the minigame mg with the given index."""
         # TODO use enum instead of checking name
-        if mg.name == 'DauT Castle':
+        if mg.name == 'Galley Micro':
+            self._add_galley_micro(index)
+        elif mg.name == 'DauT Castle':
             self._add_daut_castle(index)
         elif mg.name == 'Castle Siege':
             self._add_castle_siege(index)
         else:
             raise AssertionError(f'Minigame {mg.name} is not implemented.')
+
+    def _add_galley_micro(self, index: int) -> None:
+        """
+        Adds the Galley Micro minigame at the given index.
+
+        Checks the index is not 0 (cannot use a minigame as the tiebreaker).
+        """
+        assert index
+        rts = _RoundTriggers(self, index)
+
+        # TODO map revealers
+
+        for player in (1, 2):
+            change_view = rts.init.add_effect(effects.change_view)
+            change_view.player_source = player
+            change_view.location_x = 120
+            change_view.location_y = 200
+
+        prefix = f'[R{index}]'
+        galleys = util_units.get_units_array(self._scn, 3)
+        galleys = util_units.units_in_area(galleys, 80, 160, 160, 240)
+        for galley in galleys:
+            uid = util_units.get_id(galley)
+            # Begin changes player ownership.
+            pos = util_units.get_x(galley) + util_units.get_y(galley)
+            player = 1 if pos < 320 else 2
+            change_to_player = rts.begin.add_effect(effects.change_ownership)
+            change_to_player.number_of_units_selected = 1
+            change_to_player.player_source = 3
+            change_to_player.player_target = player
+            change_to_player.selected_object_id = util_units.get_id(galley)
+
+            # Killing a Galley gives points.
+            # Winning the round disables giving points.
+            change_pts_name = f'{prefix} P{player} loses Galley ({uid})'
+            change_pts = self._add_trigger(change_pts_name)
+            galley_sunk = change_pts.add_condition(conditions.destroy_object)
+            galley_sunk.unit_object = uid
+            if player == 1:
+                self._add_effect_p2_score(change_pts, 10)
+                util_triggers.add_cond_destroy_obj(rts.p2_wins, uid)
+                self._add_deactivate(rts.names.p1_wins, change_pts_name)
+            else:
+                self._add_effect_p1_score(change_pts, 10)
+                util_triggers.add_cond_destroy_obj(rts.p1_wins, uid)
+                self._add_deactivate(rts.names.p2_wins, change_pts_name)
+            # Cleanup removes the units.
+            util_triggers.add_effect_remove_obj(rts.cleanup, uid, player)
+
+        self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
+        self._add_activate(rts.names.p1_wins, rts.names.cleanup)
+        self._add_deactivate(rts.names.p2_wins, rts.names.p1_wins)
+        self._add_activate(rts.names.p2_wins, rts.names.cleanup)
+
 
     def _add_daut_castle(self, index: int) -> None:
         """
@@ -1362,7 +1436,7 @@ class ScnData:
         unit_player_pairs = []
         for unit in cs_units:
             pos = util_units.get_x(unit) + util_units.get_y(unit)
-            player_target = 1 if pos < 160.0 else 2 # TODO remove magic number
+            player_target = 1 if pos < 160.0 else 2
             change_to_player = rts.begin.add_effect(effects.change_ownership)
             change_to_player.number_of_units_selected = 1
             change_to_player.player_source = 3
