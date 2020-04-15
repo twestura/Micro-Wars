@@ -276,6 +276,7 @@ class _RoundTriggers:
         self._index = index
         self._names = _TriggerNames(index)
 
+        # TODO init should research techs and set the starting view
         self._init = self._scn._add_trigger(self.names.init)
         if index:
             init_var = self._init.add_condition(conditions.variable_value)
@@ -426,6 +427,8 @@ class ScnData:
         self._round_objectives: List[List[str]] = [
             [] for __ in range(len(self._events))
         ]
+
+        # TODO allow techs multiple times in json, but only research techs once.
 
     @property
     def num_rounds(self):
@@ -1181,7 +1184,8 @@ class ScnData:
         for unit in daut_units:
             pos = util_units.get_x(unit) + util_units.get_y(unit)
             uid = util_units.get_id(unit)
-            if pos >= 80.0 and uid != FLAG_A_ID:
+            uconst = util_units.get_unit_constant(unit)
+            if pos >= 80.0 and uconst != FLAG_A_ID:
                 p2_u_cond = p2_loses_army.add_condition(
                     conditions.destroy_object)
                 p2_u_cond.unit_object = uid
@@ -1199,7 +1203,7 @@ class ScnData:
         p2_builds_castle = self._add_trigger(p2_builds_castle_name)
         p2_c_cond = p2_builds_castle.add_condition(conditions.object_in_area)
         p2_c_cond.amount_or_quantity = 1
-        p2_c_cond.player = 1
+        p2_c_cond.player = 2
         p2_c_cond.object_list = 82 # TODO remove Castle magic number
         util_triggers.set_cond_area(p2_c_cond, x1, y1, x2, y2)
         self._add_activate(p2_builds_castle_name, p2_wins_name)
@@ -1212,7 +1216,8 @@ class ScnData:
         for unit in daut_units:
             pos = util_units.get_x(unit) + util_units.get_y(unit)
             uid = util_units.get_id(unit)
-            if pos < 80.0 and uid != FLAG_A_ID:
+            uconst = util_units.get_unit_constant(unit)
+            if pos < 80.0 and uconst != FLAG_A_ID:
                 p1_u_cond = p1_loses_army.add_condition(
                     conditions.destroy_object)
                 p1_u_cond.unit_object = uid
@@ -1227,6 +1232,7 @@ class ScnData:
         self._add_activate(p2_wins_name, rts.names.cleanup)
 
         # Cleanup removes units from player control.
+        # TODO also need to remove the Castle
         for uid, player_source in unit_player_pairs:
             change_from_player = rts.cleanup.add_effect(
                 effects.change_ownership)

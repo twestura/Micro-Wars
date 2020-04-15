@@ -5,5 +5,12 @@
             "elite_war_elephant": 0
         }
     },
+    {
+        "techs": ["feudal_age", "castle_age"],
+        "points": {
+            "scout_cavalry": 40,
+            "militia": 20
+        }
+    },
     "DauT Castle"
 ]
