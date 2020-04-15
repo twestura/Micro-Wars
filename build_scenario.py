@@ -315,6 +315,8 @@ class _RoundTriggers:
                      or isinstance(self._scn._events[index - 1], Minigame))):
             self._scn._add_activate(self.names.init, REVEALER_FIGHT_CREATE_NAME)
 
+        self._scn._research_techs(self._init, index)
+
         self._scn._add_activate(self.names.init, self.names.begin)
 
         self._begin = self._scn._add_trigger(self.names.begin)
@@ -575,6 +577,28 @@ class ScnData:
             tech_id = util_techs.TECH_IDS[tech_name]
             for player in (1, 2, 3):
                 util_triggers.add_effect_research_tech(trigger, tech_id, player)
+
+    def _research_techs(self, trigger: TriggerObject, index: int) -> None:
+        """
+        Adds effects to trigger to research the initial techs for the event
+        in the round given by index.
+        """
+        e = self._events[index]
+        if isinstance(e, Minigame):
+            name = e.name
+            if name == 'DauT Castle':
+                techs = ['loom', 'castle_age', 'crossbowman',
+                         'elite_skirmisher', 'fletching', 'bodkin_arrow',
+                         'sanctity', 'atonement', 'redemption']
+            elif name == 'Castle Siege':
+                techs = ['loom', 'imperial_age', 'hoardings']
+            else:
+                raise AssertionError(f'No techs specified for minigame {name}.')
+        else:
+            techs = e.techs
+        for tech in techs:
+            self._add_effect_research_tech(trigger, tech)
+
 
     def _name_variables(self) -> None:
         """Sets the names for trigger variables in the scenario."""
@@ -1157,8 +1181,6 @@ class ScnData:
         p2_stone.item_id = -1
         p2_stone.operation = ChangeVarOp.set_op.value # TODO rename enum
 
-        # TODO research minigame techs
-
         p3_units = util_units.get_units_array(self._scn, 3)
         # TODO remove magic numbers
         units_in_area = util_units.units_in_area(p3_units, 0.0, 0.0, 80.0, 80.0)
@@ -1328,8 +1350,6 @@ class ScnData:
         p2_stone.item_id = -1
         p2_stone.operation = ChangeVarOp.set_op.value # TODO rename enum
 
-        # TODO research minigame techs
-
         for player in (1, 2):
             change_view = rts.init.add_effect(effects.change_view)
             change_view.player_source = player
@@ -1437,9 +1457,6 @@ class ScnData:
         """Adds the fight with the given index."""
         rts = _RoundTriggers(self, index)
 
-        for tech_name in f.techs:
-            self._add_effect_research_tech(rts.init, tech_name)
-
         for player in (1, 2):
             change_view = rts.init.add_effect(effects.change_view)
             change_view.player_source = player
@@ -1455,18 +1472,17 @@ class ScnData:
         self._add_effect_p2_score(rts.p2_wins, self._events[index].p2_bonus)
 
         for unit in f.p1_units:
-            self._add_unit(index, unit, 1, rts)
+            self._add_fight_unit(index, unit, 1, rts)
         for unit in f.p2_units:
-            self._add_unit(index, unit, 2, rts)
+            self._add_fight_unit(index, unit, 2, rts)
 
-    def _add_unit(self, fight_index: int, unit: UnitStruct, from_player: int,
-                  rts: _RoundTriggers) -> None:
+    def _add_fight_unit(self, fight_index: int, unit: UnitStruct,
+                        from_player: int, rts: _RoundTriggers) -> None:
         """
         Adds the unit from player `from_player` to the scenario.
         `fight_index` is the index of the fight in which the unit participates.
         Checks that from_player is 1 or 2.
         """
-        # TODO use rts object
         assert from_player in (1, 2)
 
         u = util_units.copy_unit(self._scn, unit, 3)
