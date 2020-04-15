@@ -161,7 +161,18 @@ REVEALER_FIGHT_HIDE_NAME = '[I] Hide Fight Map Revealers'
 
 
 # Unit ID of Flag A.
-FLAG_A_ID = 600
+FLAG_A_UCONST = 600
+
+# Unit ids for Player 1's flags around the DauT Castle hill.
+DC_FLAGS_P1 = [168, 149, 151, 153, 170, 155, 172, 173, 175, 178]
+
+
+# Unit ids for Player 2's flags around the DauT Castle hill.
+DC_FLAGS_P2 = [148, 150, 152, 169, 154, 171, 156, 176, 174, 177]
+
+
+# Unit constant of a Castle.
+CASTLE_UCONST = 82
 
 
 # Unit ID for Player 1's Castle in the Castle Siege minigame.
@@ -320,6 +331,7 @@ class _RoundTriggers:
         # Disables the Round N/N counter for the final round.
         # TODO should the objective be removed later, to avoid gaps and to
         # show completed objectives for minigames?
+        # That is, remove during the increment trigger?
         if index == self._scn.num_rounds:
             self._scn._add_deactivate(self.names.cleanup, ROUND_OBJ_NAME)
         # TODO handle map revealers for minigames
@@ -865,7 +877,7 @@ class ScnData:
         flag_positions = [
             (util_units.get_x(flag_a), util_units.get_y(flag_a))
             for flag_a in units_in_area
-            if util_units.get_unit_constant(flag_a) == FLAG_A_ID
+            if util_units.get_unit_constant(flag_a) == FLAG_A_UCONST
         ]
         x1, y1 = (math.floor(pos) for pos in util.min_point(flag_positions))
         x2, y2 = (math.ceil(pos) for pos in util.max_point(flag_positions))
@@ -883,7 +895,7 @@ class ScnData:
         p1_castle_in_area = obj_daut_p1.add_condition(conditions.object_in_area)
         p1_castle_in_area.amount_or_quantity = 1
         p1_castle_in_area.player = 1
-        p1_castle_in_area.object_list = 82 # TODO remove Castle magic number
+        p1_castle_in_area.object_list = CASTLE_UCONST
         util_triggers.set_cond_area(p1_castle_in_area, x1, y1, x2, y2)
 
         obj_daut_p2_name = f'[O] DauT Castle Player 2 Castle Constructed'
@@ -899,7 +911,7 @@ class ScnData:
         p2_castle_in_area = obj_daut_p2.add_condition(conditions.object_in_area)
         p2_castle_in_area.amount_or_quantity = 1
         p2_castle_in_area.player = 2
-        p2_castle_in_area.object_list = 82 # TODO remove Castle magic number
+        p2_castle_in_area.object_list = CASTLE_UCONST
         util_triggers.set_cond_area(p2_castle_in_area, x1, y1, x2, y2)
 
     def _add_castle_siege_objectives(self, index: int):
@@ -1110,7 +1122,7 @@ class ScnData:
         p2_loses_army_name = f'{prefix} Player 2 Loses Army'
 
         # Transitions map revealers.
-        # TODO make Castle Siege Map Revealers
+        # TODO make DauT Castle Map Revealers
         # if index == 1 or isinstance(self._events[index-1], Minigame):
         #     self._add_activate(init_name, REVEALER_FIGHT_CREATE_NAME)
 
@@ -1142,9 +1154,9 @@ class ScnData:
         p3_units = util_units.get_units_array(self._scn, 3)
         # TODO remove magic numbers
         daut_units = util_units.units_in_area(p3_units, 0.0, 0.0, 80.0, 80.0)
-        unit_player_pairs = []
         for unit in daut_units:
-            # TODO handle flags separately
+            if util_units.get_unit_constant(unit) == FLAG_A_UCONST:
+                continue
             pos = util_units.get_x(unit) + util_units.get_y(unit)
             player_target = 1 if pos < 80.0 else 2 # TODO remove magic number
             change_to_player = rts.begin.add_effect(effects.change_ownership)
@@ -1153,7 +1165,14 @@ class ScnData:
             change_to_player.player_target = player_target
             uid = util_units.get_id(unit)
             change_to_player.selected_object_id = uid
-            unit_player_pairs.append((uid, player_target))
+        for k, flag_uids in enumerate((DC_FLAGS_P1, DC_FLAGS_P2)):
+            player_target = k + 1
+            for uid in flag_uids:
+                change_flag = rts.begin.add_effect(effects.change_ownership)
+                change_flag.number_of_units_selected = 1
+                change_flag.player_source = 3
+                change_flag.player_target = player_target
+                change_flag.selected_object_id = uid
 
         p3_units = util_units.get_units_array(self._scn, 3)
         # TODO remove magic numbers
@@ -1161,7 +1180,7 @@ class ScnData:
         flag_positions = [
             (util_units.get_x(flag_a), util_units.get_y(flag_a))
             for flag_a in units_in_area
-            if util_units.get_unit_constant(flag_a) == FLAG_A_ID
+            if util_units.get_unit_constant(flag_a) == FLAG_A_UCONST
         ]
         # The min and max positions in which the Castle can be constructed.
         x1, y1 = (math.floor(pos) for pos in util.min_point(flag_positions))
@@ -1172,7 +1191,7 @@ class ScnData:
         p1_c_cond = p1_builds_castle.add_condition(conditions.object_in_area)
         p1_c_cond.amount_or_quantity = 1
         p1_c_cond.player = 1
-        p1_c_cond.object_list = 82 # TODO remove Castle magic number
+        p1_c_cond.object_list = CASTLE_UCONST
         util_triggers.set_cond_area(p1_c_cond, x1, y1, x2, y2)
         self._add_activate(p1_builds_castle_name, p1_wins_name)
         self._add_deactivate(p1_builds_castle_name, p1_loses_army_name)
@@ -1185,7 +1204,7 @@ class ScnData:
             pos = util_units.get_x(unit) + util_units.get_y(unit)
             uid = util_units.get_id(unit)
             uconst = util_units.get_unit_constant(unit)
-            if pos >= 80.0 and uconst != FLAG_A_ID:
+            if pos >= 80.0 and uconst != FLAG_A_UCONST:
                 p2_u_cond = p2_loses_army.add_condition(
                     conditions.destroy_object)
                 p2_u_cond.unit_object = uid
@@ -1204,7 +1223,7 @@ class ScnData:
         p2_c_cond = p2_builds_castle.add_condition(conditions.object_in_area)
         p2_c_cond.amount_or_quantity = 1
         p2_c_cond.player = 2
-        p2_c_cond.object_list = 82 # TODO remove Castle magic number
+        p2_c_cond.object_list = CASTLE_UCONST
         util_triggers.set_cond_area(p2_c_cond, x1, y1, x2, y2)
         self._add_activate(p2_builds_castle_name, p2_wins_name)
         self._add_deactivate(p2_builds_castle_name, p2_loses_army_name)
@@ -1217,7 +1236,7 @@ class ScnData:
             pos = util_units.get_x(unit) + util_units.get_y(unit)
             uid = util_units.get_id(unit)
             uconst = util_units.get_unit_constant(unit)
-            if pos < 80.0 and uconst != FLAG_A_ID:
+            if pos < 80.0 and uconst != FLAG_A_UCONST:
                 p1_u_cond = p1_loses_army.add_condition(
                     conditions.destroy_object)
                 p1_u_cond.unit_object = uid
@@ -1232,14 +1251,15 @@ class ScnData:
         self._add_activate(p2_wins_name, rts.names.cleanup)
 
         # Cleanup removes units from player control.
-        # TODO also need to remove the Castle
-        for uid, player_source in unit_player_pairs:
-            change_from_player = rts.cleanup.add_effect(
-                effects.change_ownership)
-            change_from_player.number_of_units_selected = 1
-            change_from_player.player_source = player_source
-            change_from_player.player_target = 3
-            change_from_player.selected_object_id = uid
+        change_1_to_3 = rts.cleanup.add_effect(effects.change_ownership)
+        change_1_to_3.player_source = 1
+        change_1_to_3.player_target = 3
+        # Don't include (0, 0), since p1's Invisible Object is there.
+        util_triggers.set_effect_area(change_1_to_3, 1, 1, 79, 79)
+        change_2_to_3 = rts.cleanup.add_effect(effects.change_ownership)
+        change_2_to_3.player_source = 2
+        change_2_to_3.player_target = 3
+        util_triggers.set_effect_area(change_2_to_3, 0, 0, 79, 79)
 
         # Removes stone after round is over
         p1_stone_remove = rts.cleanup.add_effect(effects.modify_resource)
@@ -1535,12 +1555,15 @@ def scratch(args): # pylint: disable=unused-argument
     print(scratch_path)
     scn = AoE2Scenario(SCENARIO_TEMPLATE)
     p3_units = util_units.get_units_array(scn, 3)
-    for u in p3_units:
-        if util_units.get_unit_constant(u) == 82:
-            x = util_units.get_x(u)
-            y = util_units.get_y(u)
-            unit_id = util_units.get_id(u)
-            print(f'id: {unit_id} - ({x}, {y})')
+    p3_units = util_units.units_in_area(p3_units, 0, 0, 80, 80)
+    flags = [u for u in p3_units
+             if util_units.get_unit_constant(u) == FLAG_A_UCONST]
+    flags.sort(key=lambda u: (util_units.get_x(u), util_units.get_y(u)))
+    for flag in flags:
+        x = util_units.get_x(flag)
+        y = util_units.get_y(flag)
+        unit_id = util_units.get_id(flag)
+        print(f'id: {unit_id} - ({x}, {y})')
 
 
 def main():
