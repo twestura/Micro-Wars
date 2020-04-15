@@ -28,6 +28,7 @@ GNU General Public License v3.0: See the LICENSE file.
 # Unit angles are given in radians (as a 32-bit float).
 # 0.0 is facing Northeast, and the radian values increase clockwise.
 
+# TODO activate triggers only when they are needed (in init or begin)
 
 import argparse
 from collections import defaultdict
@@ -325,15 +326,14 @@ class _RoundTriggers:
 
         # TODO think more about how to structure p1 and p2 wins triggers
         self._p1_wins = self._scn._add_trigger(self.names.p1_wins)
+        self._p1_wins.enabled = False
         self._p2_wins = self._scn._add_trigger(self.names.p2_wins)
+        self._p2_wins.enabled = False
 
         self._cleanup = self._scn._add_trigger(self.names.cleanup)
         self._cleanup.enabled = False
         self._scn._add_activate(self.names.cleanup, self.names.inc)
         # Disables the Round N/N counter for the final round.
-        # TODO should the objective be removed later, to avoid gaps and to
-        # show completed objectives for minigames?
-        # That is, remove during the increment trigger?
         if index == self._scn.num_rounds:
             self._scn._add_deactivate(self.names.cleanup, ROUND_OBJ_NAME)
         # TODO handle map revealers for minigames
@@ -1182,6 +1182,9 @@ class ScnData:
             change_view.location_x = 120
             change_view.location_y = 200
 
+        self._add_activate(rts.names.begin, rts.names.p1_wins)
+        self._add_activate(rts.names.begin, rts.names.p2_wins)
+
         prefix = f'[R{index}]'
         galleys = util_units.get_units_array(self._scn, 3)
         galleys = util_units.units_in_area(galleys, 80, 160, 160, 240)
@@ -1534,6 +1537,9 @@ class ScnData:
             change_view.location_x = FIGHT_CENTER_X
             change_view.location_y = FIGHT_CENTER_Y
 
+        self._add_activate(rts.names.begin, rts.names.p1_wins)
+        self._add_activate(rts.names.begin, rts.names.p2_wins)
+
         # TODO think more about how to structure p1 and p2 wins triggers
         self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
         self._add_activate(rts.names.p1_wins, rts.names.cleanup)
@@ -1585,6 +1591,8 @@ class ScnData:
         pretty_name = util.pretty_print_name(unit_name)
         change_pts_name = f'{prefix} P{from_player} loses {pretty_name} ({uid})'
         change_pts = self._add_trigger(change_pts_name)
+        change_pts.enabled = False
+        self._add_activate(rts.names.begin, change_pts_name)
         unit_killed = change_pts.add_condition(conditions.destroy_object)
         unit_killed.unit_object = uid
         if from_player == 1:
