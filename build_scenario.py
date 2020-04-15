@@ -440,7 +440,8 @@ class ScnData:
             [] for __ in range(len(self._events))
         ]
 
-        # TODO allow techs multiple times in json, but only research techs once.
+        # The set of technologies researched by the currently added triggers.
+        self._researched_techs = set()
 
     @property
     def num_rounds(self):
@@ -558,6 +559,22 @@ class ScnData:
         diff_subtract.operation = ChangeVarOp.subtract.value
         diff_subtract.from_variable = self._var_ids['score-difference']
         diff_subtract.message = 'score-difference'
+
+    def _add_effect_research_tech(self, trigger: TriggerObject,
+                                  tech_name: str) -> None:
+        """
+        Adds an effect to trigger to research the technology given by
+        tech_name if it's not already researched. The technology is researched
+        for all players.
+
+        Checks tech_name is a valid technology name.
+        """
+        assert util_techs.is_tech(tech_name)
+        if tech_name not in self._researched_techs:
+            self._researched_techs.add(tech_name)
+            tech_id = util_techs.TECH_IDS[tech_name]
+            for player in (1, 2, 3):
+                util_triggers.add_effect_research_tech(trigger, tech_id, player)
 
     def _name_variables(self) -> None:
         """Sets the names for trigger variables in the scenario."""
@@ -1420,11 +1437,8 @@ class ScnData:
         """Adds the fight with the given index."""
         rts = _RoundTriggers(self, index)
 
-        for player in (1, 2, 3):
-            for tech_name in f.techs:
-                tech_id = util_techs.TECH_IDS[tech_name]
-                util_triggers.add_effect_research_tech(rts.init, tech_id,
-                                                       player)
+        for tech_name in f.techs:
+            self._add_effect_research_tech(rts.init, tech_name)
 
         for player in (1, 2):
             change_view = rts.init.add_effect(effects.change_view)

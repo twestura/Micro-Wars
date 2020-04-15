@@ -5,6 +5,9 @@ GNU General Public License v3.0: See the LICENSE file.
 """
 
 
+# TODO support multiple techs
+
+
 import copy
 from enum import Enum
 import json

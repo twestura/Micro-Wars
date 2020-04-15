@@ -6,7 +6,7 @@
         }
     },
     {
-        "techs": [],
+        "techs": ["loom"],
         "points": {
             "scout_cavalry": 40,
             "militia": 20
