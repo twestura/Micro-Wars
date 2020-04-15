@@ -571,7 +571,7 @@ class ScnData:
 
         Checks tech_name is a valid technology name.
         """
-        assert util_techs.is_tech(tech_name)
+        assert util_techs.is_tech(tech_name), f'{tech_name} is not a tech.'
         if tech_name not in self._researched_techs:
             self._researched_techs.add(tech_name)
             tech_id = util_techs.TECH_IDS[tech_name]
@@ -591,7 +591,8 @@ class ScnData:
                          'elite_skirmisher', 'fletching', 'bodkin_arrow',
                          'sanctity', 'atonement', 'redemption']
             elif name == 'Castle Siege':
-                techs = ['loom', 'imperial_age', 'hoardings']
+                techs = ['loom', 'imperial_age', 'hoardings', 'chemistry',
+                         'capped_ram', 'siege_ram', 'pikeman', 'halberdier']
             else:
                 raise AssertionError(f'No techs specified for minigame {name}.')
         else:
@@ -911,9 +912,7 @@ class ScnData:
         obj_daut.mute_objectives = True
         util_triggers.add_cond_gaia_defeated(obj_daut)
 
-        # TODO Code is repeated later, refactor adding this condition.
         p3_units = util_units.get_units_array(self._scn, 3)
-        # TODO remove magic numbers
         units_in_area = util_units.units_in_area(p3_units, 0.0, 0.0, 80.0, 80.0)
         flag_positions = [
             (util_units.get_x(flag_a), util_units.get_y(flag_a))
@@ -1182,7 +1181,6 @@ class ScnData:
         p2_stone.operation = ChangeVarOp.set_op.value # TODO rename enum
 
         p3_units = util_units.get_units_array(self._scn, 3)
-        # TODO remove magic numbers
         units_in_area = util_units.units_in_area(p3_units, 0.0, 0.0, 80.0, 80.0)
         flags = [
             flag_a
@@ -1360,7 +1358,6 @@ class ScnData:
         # TODO refactor splitting ownership down the middle
         # Begin changes ownership
         p3_units = util_units.get_units_array(self._scn, 3)
-        # TODO remove magic numbers
         cs_units = util_units.units_in_area(p3_units, 80.0, 0, 160.0, 80.0)
         unit_player_pairs = []
         for unit in cs_units:
@@ -1447,7 +1444,7 @@ class ScnData:
         p1_stone_remove.item_id = -1
         p1_stone_remove.operation = ChangeVarOp.set_op.value # TODO rename enum
         p2_stone_remove = rts.cleanup.add_effect(effects.modify_resource)
-        p2_stone_remove.quantity = 0 # TODO magic number
+        p2_stone_remove.quantity = 0
         p2_stone_remove.tribute_list = 2 # TODO magic number
         p2_stone_remove.player_source = 2
         p2_stone_remove.item_id = -1
