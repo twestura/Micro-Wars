@@ -1142,13 +1142,29 @@ class ScnData:
 
         # TODO research minigame techs
 
+        p3_units = util_units.get_units_array(self._scn, 3)
+        # TODO remove magic numbers
+        units_in_area = util_units.units_in_area(p3_units, 0.0, 0.0, 80.0, 80.0)
+        flags = [
+            flag_a
+            for flag_a in units_in_area
+            if util_units.get_unit_constant(flag_a) == FLAG_A_UCONST
+        ]
+        flag_positions = [
+            (util_units.get_x(flag_a), util_units.get_y(flag_a))
+            for flag_a in flags
+        ]
+        # The min and max positions in which the Castle can be constructed.
+        x1, y1 = (math.floor(pos) for pos in util.min_point(flag_positions))
+        x2, y2 = (math.ceil(pos) for pos in util.max_point(flag_positions))
+        avg = util_units.avg_pos(flags)
+
         # TODO refactor changing view
         for player in (1, 2):
             change_view = rts.init.add_effect(effects.change_view)
             change_view.player_source = player
-            # TODO remove magic numbers
-            change_view.location_x = 40
-            change_view.location_y = 40
+            change_view.location_x = round(avg[0])
+            change_view.location_y = round(avg[1])
 
         # Begin changes ownership.
         p3_units = util_units.get_units_array(self._scn, 3)
@@ -1173,18 +1189,6 @@ class ScnData:
                 change_flag.player_source = 3
                 change_flag.player_target = player_target
                 change_flag.selected_object_id = uid
-
-        p3_units = util_units.get_units_array(self._scn, 3)
-        # TODO remove magic numbers
-        units_in_area = util_units.units_in_area(p3_units, 0.0, 0.0, 80.0, 80.0)
-        flag_positions = [
-            (util_units.get_x(flag_a), util_units.get_y(flag_a))
-            for flag_a in units_in_area
-            if util_units.get_unit_constant(flag_a) == FLAG_A_UCONST
-        ]
-        # The min and max positions in which the Castle can be constructed.
-        x1, y1 = (math.floor(pos) for pos in util.min_point(flag_positions))
-        x2, y2 = (math.ceil(pos) for pos in util.max_point(flag_positions))
 
         # p1 constructs castle
         p1_builds_castle = self._add_trigger(p1_builds_castle_name)
