@@ -94,6 +94,13 @@ DELAY_ROUND_AFTER = 3
 DELAY_ROUND_BEFORE = 3
 
 
+# Delay before running the cleanup trigger (necessary to all for seeing
+# unit death animations to completion before the units are removed).
+# TODO perhaps allow cleanup delay to depend on the event,
+# e.g. Castle destruction animations might take longer.
+DELAY_CLEANUP = 3
+
+
 # The number of seconds to wait before ending the scenario when a
 # player has won.
 DELAY_VICTORY = 10
@@ -138,6 +145,10 @@ ROUND_OBJ_NAME = '[O] Round Objective Header'
 
 # Name of the tiebreaker header objective displayed in the menu and on screen.
 TIEBREAKER_OBJ_NAME = '[O] Tiebreaker'
+
+
+# Index of population headroom in the accumulate attribute condition list.
+ACC_ATTR_POP_HEADROOM = 11
 
 
 # Unit ID for a Map Revealer object.
@@ -332,6 +343,7 @@ class _RoundTriggers:
 
         self._cleanup = self._scn._add_trigger(self.names.cleanup)
         self._cleanup.enabled = False
+        util_triggers.add_cond_timer(self._cleanup, DELAY_CLEANUP)
         self._scn._add_activate(self.names.cleanup, self.names.inc)
         # Disables the Round N/N counter for the final round.
         if index == self._scn.num_rounds:
@@ -1203,6 +1215,8 @@ class ScnData:
             # Winning the round disables giving points.
             change_pts_name = f'{prefix} P{player} loses Galley ({uid})'
             change_pts = self._add_trigger(change_pts_name)
+            change_pts.enabled = False
+            self._add_activate(rts.names.begin, change_pts_name)
             galley_sunk = change_pts.add_condition(conditions.destroy_object)
             galley_sunk.unit_object = uid
             if player == 1:
@@ -1544,9 +1558,20 @@ class ScnData:
         self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
         self._add_activate(rts.names.p1_wins, rts.names.cleanup)
         self._add_effect_p1_score(rts.p1_wins, self._events[index].p1_bonus)
+        p2_pop_0 = rts.p1_wins.add_condition(conditions.accumulate_attribute)
+        p2_pop_0.amount_or_quantity = 1
+        p2_pop_0.resource_type_or_tribute_list = ACC_ATTR_POP_HEADROOM
+        p2_pop_0.player = 2
+        p2_pop_0.inverted = True
+
         self._add_deactivate(rts.names.p2_wins, rts.names.p1_wins)
         self._add_activate(rts.names.p2_wins, rts.names.cleanup)
         self._add_effect_p2_score(rts.p2_wins, self._events[index].p2_bonus)
+        p1_pop_0 = rts.p2_wins.add_condition(conditions.accumulate_attribute)
+        p1_pop_0.amount_or_quantity = 1
+        p1_pop_0.resource_type_or_tribute_list = ACC_ATTR_POP_HEADROOM
+        p1_pop_0.player = 1
+        p1_pop_0.inverted = True
 
         for unit in f.p1_units:
             self._add_fight_unit(index, unit, 1, rts)
@@ -1597,11 +1622,9 @@ class ScnData:
         unit_killed.unit_object = uid
         if from_player == 1:
             self._add_effect_p2_score(change_pts, pts)
-            util_triggers.add_cond_destroy_obj(rts.p2_wins, uid)
             self._add_deactivate(rts.names.p1_wins, change_pts_name)
         else:
             self._add_effect_p1_score(change_pts, pts)
-            util_triggers.add_cond_destroy_obj(rts.p1_wins, uid)
             self._add_deactivate(rts.names.p2_wins, change_pts_name)
         util_triggers.add_effect_remove_obj(rts.cleanup, uid, from_player)
 
