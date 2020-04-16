@@ -911,8 +911,8 @@ class ScnData:
         self._round_objectives[index].append(obj_daut_name)
         obj_daut = self._add_trigger(obj_daut_name)
         obj_daut.enabled = False
-        obj_daut.description = "Build a Castle inside of the Flags, or defeat your opponent's army." # pylint: disable=line-too-long
-        obj_daut.short_description = 'Build a Castle inside of the Flags.'
+        obj_daut.description = "Build a Castle (strictly) inside of the Flags, or defeat your opponent's army." # pylint: disable=line-too-long
+        obj_daut.short_description = 'Build a Castle inside the Flags.'
         obj_daut.display_as_objective = True
         obj_daut.display_on_screen = True
         obj_daut.description_order = 50
@@ -928,6 +928,11 @@ class ScnData:
         ]
         x1, y1 = (math.floor(pos) for pos in util.min_point(flag_positions))
         x2, y2 = (math.ceil(pos) for pos in util.max_point(flag_positions))
+        # Adjusts positions to keep the Castle strictly inside the flags.
+        x1 += 3
+        y1 += 3
+        x2 -= 3
+        y2 -= 3
 
         obj_daut_p1_name = f'[O] DauT Castle Player 1 Castle Constructed'
         self._round_objectives[index].append(obj_daut_p1_name)
@@ -1242,8 +1247,12 @@ class ScnData:
         x1, y1 = (math.floor(pos) for pos in util.min_point(flag_positions))
         x2, y2 = (math.ceil(pos) for pos in util.max_point(flag_positions))
         avg = util_units.avg_pos(flags)
+        # Adjusts positions to keep the Castle strictly inside the flags.
+        x1 += 3
+        y1 += 3
+        x2 -= 3
+        y2 -= 3
 
-        # TODO refactor changing view
         for player in (1, 2):
             change_view = rts.init.add_effect(effects.change_view)
             change_view.player_source = player
@@ -1268,6 +1277,8 @@ class ScnData:
 
         # p1 constructs castle
         p1_builds_castle = self._add_trigger(p1_builds_castle_name)
+        p1_builds_castle.enabled = False
+        self._add_activate(rts.names.begin, p1_builds_castle_name)
         p1_c_cond = p1_builds_castle.add_condition(conditions.object_in_area)
         p1_c_cond.amount_or_quantity = 1
         p1_c_cond.player = 1
@@ -1280,14 +1291,9 @@ class ScnData:
 
         # p2 loses army
         p2_loses_army = self._add_trigger(p2_loses_army_name)
-        for unit in daut_units:
-            pos = util_units.get_x(unit) + util_units.get_y(unit)
-            uid = util_units.get_id(unit)
-            uconst = util_units.get_unit_constant(unit)
-            if pos >= 80.0 and uconst != FLAG_A_UCONST:
-                p2_u_cond = p2_loses_army.add_condition(
-                    conditions.destroy_object)
-                p2_u_cond.unit_object = uid
+        p2_loses_army.enabled = False
+        self._add_activate(rts.names.begin, p2_loses_army_name)
+        util_triggers.add_cond_pop0(p2_loses_army, 2)
         self._add_activate(p2_loses_army_name, p1_wins_name)
         self._add_deactivate(p2_loses_army_name, p1_builds_castle_name)
         self._add_deactivate(p2_loses_army_name, p1_loses_army_name)
@@ -1300,6 +1306,8 @@ class ScnData:
 
         # p2 constructs castle
         p2_builds_castle = self._add_trigger(p2_builds_castle_name)
+        p2_builds_castle.enabled = False
+        self._add_activate(rts.names.begin, p2_builds_castle_name)
         p2_c_cond = p2_builds_castle.add_condition(conditions.object_in_area)
         p2_c_cond.amount_or_quantity = 1
         p2_c_cond.player = 2
@@ -1312,14 +1320,9 @@ class ScnData:
 
         # p1 loses army
         p1_loses_army = self._add_trigger(p1_loses_army_name)
-        for unit in daut_units:
-            pos = util_units.get_x(unit) + util_units.get_y(unit)
-            uid = util_units.get_id(unit)
-            uconst = util_units.get_unit_constant(unit)
-            if pos < 80.0 and uconst != FLAG_A_UCONST:
-                p1_u_cond = p1_loses_army.add_condition(
-                    conditions.destroy_object)
-                p1_u_cond.unit_object = uid
+        p1_loses_army.enabled = False
+        self._add_activate(rts.names.begin, p1_loses_army_name)
+        util_triggers.add_cond_pop0(p1_loses_army, 1)
         self._add_activate(p1_loses_army_name, p2_wins_name)
         self._add_deactivate(p1_loses_army_name, p2_builds_castle_name)
         self._add_deactivate(p1_loses_army_name, p2_loses_army_name)
@@ -1384,7 +1387,6 @@ class ScnData:
             util_triggers.add_effect_change_own_unit(rts.begin, 3, target, uid)
             unit_player_pairs.append((uid, target))
 
-        # TODO disable these triggers, enable when the round begins
         # p2 loses castle
         p2_loses_castle = self._add_trigger(p2_loses_castle_name)
         p2_loses_castle.enabled = False
