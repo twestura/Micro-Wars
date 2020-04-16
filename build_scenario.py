@@ -168,13 +168,13 @@ REVEALER_FIGHT_HIDE_NAME = '[I] Hide Fight Map Revealers'
 # Unit ID of Flag A.
 FLAG_A_UCONST = 600
 
-
+# TODO remove unused flags
 # Unit ids for Player 1's flags around the DauT Castle hill.
-DC_FLAGS_P1 = [168, 149, 151, 153, 170, 155, 172, 173, 175, 178]
+DC_FLAGS_P1 = [168, 149, 151, 153, 170, 155, 172, 178]
 
 
 # Unit ids for Player 2's flags around the DauT Castle hill.
-DC_FLAGS_P2 = [148, 150, 152, 169, 154, 171, 156, 176, 174, 177]
+DC_FLAGS_P2 = [148, 150, 152, 169, 154, 171, 156, 177]
 
 
 # The Stone quantity to assign for each player at the start of the
@@ -480,8 +480,9 @@ class ScnData:
         Raises a ValueError if creating this trigger would create a
         trigger with a duplicate name.
         """
-        trigger_name = f'-- {name} --'
-        self._add_trigger(trigger_name)
+        header_name = f'-- {name} --'
+        header = self._add_trigger(header_name)
+        header.enabled = False
 
     def _add_activate(self, name_source: str, name_target: str):
         """
