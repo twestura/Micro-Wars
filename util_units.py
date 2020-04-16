@@ -193,9 +193,6 @@ def avg_pos(unit_list: List[UnitStruct]) -> Tuple[float, float]:
             sum(get_y(unit) for unit in unit_list) / n)
 
 
-# TODO rethink offsets so I don't need to negate them when creating the fights.
-
-
 def center_pos(unit: UnitStruct, avg: Tuple[float, float],
                center: Tuple[float, float], offset: int) -> Tuple[int, int]:
     """
@@ -204,7 +201,7 @@ def center_pos(unit: UnitStruct, avg: Tuple[float, float],
     average position avg.
     """
     # Translates to the origin (0, 0),
-    # then translate to the new center,
+    # then translates to the new center,
     # then applies the offset.
     x = get_x(unit) - avg[0] + center[0] + offset
     y = get_y(unit) - avg[1] + center[1] - offset

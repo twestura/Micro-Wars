@@ -279,7 +279,6 @@ class _RoundTriggers:
         self._index = index
         self._names = _TriggerNames(index)
 
-        # TODO init should set the starting view
         self._init = self._scn._add_trigger(self.names.init)
         if index:
             init_var = self._init.add_condition(conditions.variable_value)
@@ -301,7 +300,8 @@ class _RoundTriggers:
 
         # Turns on the middle fight map revealers if the current
         # index is a fight and the revealers are currently off, that is,
-        # if
+        # if fight is the very first event or the previous event was
+        # a minigame.
         if (isinstance(self._scn._events[index], Fight)
                 and (index == 1
                      or isinstance(self._scn._events[index - 1], Minigame))):
@@ -315,7 +315,6 @@ class _RoundTriggers:
         self._begin.enabled = False
         util_triggers.add_cond_timer(self._begin, DELAY_ROUND_BEFORE)
 
-        # TODO think more about how to structure p1 and p2 wins triggers
         self._p1_wins = self._scn._add_trigger(self.names.p1_wins)
         self._p1_wins.enabled = False
         self._p2_wins = self._scn._add_trigger(self.names.p2_wins)
@@ -1141,7 +1140,6 @@ class ScnData:
 
     def _add_minigame(self, index: int, mg: Minigame) -> None:
         """Adds the minigame mg with the given index."""
-        # TODO use enum instead of checking name
         if mg.name == 'Galley Micro':
             self._add_galley_micro(index)
         elif mg.name == 'DauT Castle':
@@ -1169,21 +1167,20 @@ class ScnData:
             change_view.location_y = 200
 
         self._add_activate(rts.names.begin, rts.names.p1_wins)
+        util_triggers.add_cond_pop0(rts.p1_wins, 2)
         self._add_activate(rts.names.begin, rts.names.p2_wins)
+        util_triggers.add_cond_pop0(rts.p2_wins, 1)
 
         prefix = f'[R{index}]'
         galleys = util_units.get_units_array(self._scn, 3)
         galleys = util_units.units_in_area(galleys, 80, 160, 160, 240)
         for galley in galleys:
-            uid = util_units.get_id(galley)
-            # Begin changes player ownership.
             pos = util_units.get_x(galley) + util_units.get_y(galley)
             player = 1 if pos < 320 else 2
             util_triggers.add_effect_change_own_unit(rts.begin, 3, player,
                                                      util_units.get_id(galley))
 
-            # Killing a Galley gives points.
-            # Winning the round disables giving points.
+            uid = util_units.get_id(galley)
             change_pts_name = f'{prefix} P{player} loses Galley ({uid})'
             change_pts = self._add_trigger(change_pts_name)
             change_pts.enabled = False
@@ -1192,13 +1189,11 @@ class ScnData:
             galley_sunk.unit_object = uid
             if player == 1:
                 self._add_effect_p2_score(change_pts, 10)
-                util_triggers.add_cond_destroy_obj(rts.p2_wins, uid)
                 self._add_deactivate(rts.names.p1_wins, change_pts_name)
             else:
                 self._add_effect_p1_score(change_pts, 10)
-                util_triggers.add_cond_destroy_obj(rts.p1_wins, uid)
                 self._add_deactivate(rts.names.p2_wins, change_pts_name)
-            # Cleanup removes the units.
+
             util_triggers.add_effect_remove_obj(rts.cleanup, uid, player)
 
         self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)

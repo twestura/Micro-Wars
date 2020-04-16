@@ -151,7 +151,6 @@ def add_effect_research_tech(trigger: TriggerObject, tech_id: int,
     res_tech = trigger.add_effect(effects.research_technology)
     res_tech.player_source = player
     res_tech.technology = tech_id
-    # TODO find out what force research technology does
     res_tech.force_research_technology = True
 
 

@@ -5,9 +5,6 @@ GNU General Public License v3.0: See the LICENSE file.
 """
 
 
-# TODO support multiple techs
-
-
 import copy
 from enum import Enum
 import json
@@ -207,8 +204,7 @@ class Fight:
         return self._p2_bonus
 
 
-# TODO annotate type of event_data
-# TODO annotate with sum return type of fight or minigame
+# TODO annotate type of event_data and return type with sum of fight or minigame
 def make_fights(units_scn: AoE2Scenario, event_data,
                 center: Tuple[int, int], offset: int):
     """
@@ -281,7 +277,6 @@ def load_fight_data(filepath: str = DEFAULT_FILE):
     num_fights = 0
     for event in loaded:
         if isinstance(event, str):
-            # TODO load Minigame techs
             event_data.append(Minigame(event, []))
         else:
             num_fights += 1
