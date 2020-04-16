@@ -5,10 +5,37 @@ GNU General Public License v3.0: See the LICENSE file.
 """
 
 
+from enum import Enum
 from AoE2ScenarioParser.datasets import conditions, effects
 from AoE2ScenarioParser.objects.condition_obj import ConditionObject
 from AoE2ScenarioParser.objects.effect_obj import EffectObject
 from AoE2ScenarioParser.objects.trigger_obj import TriggerObject
+
+
+# Index of stone in the accumulate attribute condition list.
+ACC_ATTR_STONE = 2
+
+
+# Index of population headroom in the accumulate attribute condition list.
+ACC_ATTR_POP_HEADROOM = 11
+
+
+class ChangeVarOp(Enum):
+    """Represents the value for the operation of a Change Variable Effect."""
+    set_op = 1
+    add = 2
+    subtract = 3
+    multiply = 4
+    divide = 5
+
+
+class VarValComp(Enum):
+    """Represents the value for the comparison of a Variable Value Condition."""
+    equal = 0
+    less = 1
+    larger = 2
+    less_or_equal = 3
+    larger_or_equal = 4
 
 
 def add_cond_destroy_obj(trigger: TriggerObject, unit_id: int) -> None:
@@ -30,6 +57,15 @@ def add_cond_gaia_defeated(trigger: TriggerObject) -> None:
     gaia_defeated.player = 0
 
 
+def add_cond_pop0(trigger: TriggerObject, player: int) -> None:
+    """Adds a condition to trigger that the player has population 0."""
+    pop0 = trigger.add_condition(conditions.accumulate_attribute)
+    pop0.player = player
+    pop0.amount_or_quantity = 1
+    pop0.resource_type_or_tribute_list = ACC_ATTR_POP_HEADROOM
+    pop0.inverted = True
+
+
 def add_cond_timer(trigger: TriggerObject, num_seconds: int) -> None:
     """Adds a timer condition to trigger to wait num_seconds seconds."""
     timer = trigger.add_condition(conditions.timer)
@@ -41,6 +77,17 @@ def add_effect_activate(source: TriggerObject, target: int) -> None:
     activate = source.add_effect(effects.activate_trigger)
     activate.trigger_id = target
 
+def add_effect_change_own_unit(trigger: TriggerObject, source: int, target: int,
+                               uid: int) -> None:
+    """
+    Adds an effect to trigger to change the ownership of the unit with
+    id uid from player source to player target.
+    """
+    change_own = trigger.add_effect(effects.change_ownership)
+    change_own.player_source = source
+    change_own.player_target = target
+    change_own.selected_object_id = uid
+    change_own.number_of_units_selected = 1
 
 def add_effect_deactivate(source: TriggerObject, target: int) -> None:
     """Adds an effect to source to dectivate the trigger with index target."""
@@ -52,6 +99,20 @@ def add_effect_delcare_victory(trigger: TriggerObject, player: int) -> None:
     """Adds to trigger an effect to Declare Victory to the player."""
     declare_victory = trigger.add_effect(effects.declare_victory)
     declare_victory.player_source = player
+
+
+def add_effect_modify_res(trigger: TriggerObject, player: int, quantity: int,
+                          tribute_list: int) -> None:
+    """
+    Adds an effect to trigger to set the player's resource at the
+    index given by tribute_list to quantity.
+    """
+    modify_res = trigger.add_effect(effects.modify_resource)
+    modify_res.player_source = player
+    modify_res.quantity = quantity
+    modify_res.tribute_list = tribute_list
+    modify_res.item_id = -1
+    modify_res.operation = ChangeVarOp.set_op.value
 
 
 def add_effect_remove_obj(trigger: TriggerObject, unit_id: int,

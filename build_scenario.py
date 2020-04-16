@@ -28,11 +28,9 @@ GNU General Public License v3.0: See the LICENSE file.
 # Unit angles are given in radians (as a 32-bit float).
 # 0.0 is facing Northeast, and the radian values increase clockwise.
 
-# TODO activate triggers only when they are needed (in init or begin)
 
 import argparse
 from collections import defaultdict
-from enum import Enum
 import math
 from typing import Dict, List, Set
 from bidict import bidict
@@ -48,6 +46,7 @@ from event import Fight, Minigame
 import util
 import util_techs
 import util_triggers
+from util_triggers import ChangeVarOp, VarValComp
 import util_units
 
 
@@ -96,8 +95,6 @@ DELAY_ROUND_BEFORE = 3
 
 # Delay before running the cleanup trigger (necessary to all for seeing
 # unit death animations to completion before the units are removed).
-# TODO perhaps allow cleanup delay to depend on the event,
-# e.g. Castle destruction animations might take longer.
 DELAY_CLEANUP = 3
 
 
@@ -147,10 +144,6 @@ ROUND_OBJ_NAME = '[O] Round Objective Header'
 TIEBREAKER_OBJ_NAME = '[O] Tiebreaker'
 
 
-# Index of population headroom in the accumulate attribute condition list.
-ACC_ATTR_POP_HEADROOM = 11
-
-
 # Unit ID for a Map Revealer object.
 UNIT_ID_MAP_REVEALER = 837
 
@@ -175,12 +168,18 @@ REVEALER_FIGHT_HIDE_NAME = '[I] Hide Fight Map Revealers'
 # Unit ID of Flag A.
 FLAG_A_UCONST = 600
 
+
 # Unit ids for Player 1's flags around the DauT Castle hill.
 DC_FLAGS_P1 = [168, 149, 151, 153, 170, 155, 172, 173, 175, 178]
 
 
 # Unit ids for Player 2's flags around the DauT Castle hill.
 DC_FLAGS_P2 = [148, 150, 152, 169, 154, 171, 156, 176, 174, 177]
+
+
+# The Stone quantity to assign for each player at the start of the
+# DauT Castle minigame.
+DC_STONE = 1300
 
 
 # Unit constant of a Castle.
@@ -193,24 +192,6 @@ CS_P1_CASTLE_ID = 813
 
 # Unit ID for Player 2's Castle in the Castle Siege minigame.
 CS_P2_CASTLE_ID = 830
-
-
-class ChangeVarOp(Enum):
-    """Represents the value for the operation of a Change Variable Effect."""
-    set_op = 1
-    add = 2
-    subtract = 3
-    multiply = 4
-    divide = 5
-
-
-class VarValComp(Enum):
-    """Represents the value for the comparison of a Variable Value Condition."""
-    equal = 0
-    less = 1
-    larger = 2
-    less_or_equal = 3
-    larger_or_equal = 4
 
 
 class _TriggerNames:
@@ -273,8 +254,6 @@ class _TriggerNames:
         return f'Trigger Names at index {self.index}'
 
 
-# TODO can I make this an inner class so I don't need to pass the scenario
-# object to the constructor?
 class _RoundTriggers:
     """
     An instance contains the basic 6 triggers for each round in the
@@ -285,7 +264,8 @@ class _RoundTriggers:
     round.
     """
 
-    # TODO figure out how to use ScnData as a type annotation for scn
+    # TODO figure out how to use ScnData as a type annotation for scn,
+    # even though the class hasn't been created yet (gets a red line in pylint)
     def __init__(self, scn_data, index: int):
         """
         Initializes a base set of triggers in the scenario data
@@ -299,7 +279,7 @@ class _RoundTriggers:
         self._index = index
         self._names = _TriggerNames(index)
 
-        # TODO init should research techs and set the starting view
+        # TODO init should set the starting view
         self._init = self._scn._add_trigger(self.names.init)
         if index:
             init_var = self._init.add_condition(conditions.variable_value)
@@ -427,8 +407,6 @@ class ScnData:
     3. Call the setup_scenario method.
     4. Call the write_to_file method.
     """
-
-    # TODO map minigame to method
 
     # TODO annotate the type of the events list
     def __init__(self, scn: AoE2Scenario, events):
@@ -675,7 +653,7 @@ class ScnData:
         ai_loaded = self._add_trigger(ai_loaded_name)
         stone_2197 = ai_loaded.add_condition(conditions.accumulate_attribute)
         stone_2197.amount_or_quantity = 2197
-        stone_2197.resource_type_or_tribute_list = 2 # TODO make enum
+        stone_2197.resource_type_or_tribute_list = util_triggers.ACC_ATTR_STONE
         stone_2197.player = 3
         self._add_deactivate(ai_loaded_name, ai_not_loaded_name)
 
@@ -1159,12 +1137,6 @@ class ScnData:
                     f'Fight {index}' if index else 'Tiebreaker')
                 self._add_fight(index, e)
 
-    # TODO abstract out creating the init trigger
-    # or, more generally, abstract out creating the basic triggers
-    # Can return these triggers, then individual events add to them.
-    # Another abstraction: There is an "or" or choosing which player wins
-    # a round
-
     def _add_minigame(self, index: int, mg: Minigame) -> None:
         """Adds the minigame mg with the given index."""
         # TODO use enum instead of checking name
@@ -1205,11 +1177,8 @@ class ScnData:
             # Begin changes player ownership.
             pos = util_units.get_x(galley) + util_units.get_y(galley)
             player = 1 if pos < 320 else 2
-            change_to_player = rts.begin.add_effect(effects.change_ownership)
-            change_to_player.number_of_units_selected = 1
-            change_to_player.player_source = 3
-            change_to_player.player_target = player
-            change_to_player.selected_object_id = util_units.get_id(galley)
+            util_triggers.add_effect_change_own_unit(rts.begin, 3, player,
+                                                     util_units.get_id(galley))
 
             # Killing a Galley gives points.
             # Winning the round disables giving points.
@@ -1257,19 +1226,9 @@ class ScnData:
         # if index == 1 or isinstance(self._events[index-1], Minigame):
         #     self._add_activate(init_name, REVEALER_FIGHT_CREATE_NAME)
 
-        # TODO refactor setting resources
-        p1_stone = rts.init.add_effect(effects.modify_resource)
-        p1_stone.quantity = 1300 # TODO magic number
-        p1_stone.tribute_list = 2 # TODO magic number
-        p1_stone.player_source = 1
-        p1_stone.item_id = -1
-        p1_stone.operation = ChangeVarOp.set_op.value # TODO rename enum
-        p2_stone = rts.init.add_effect(effects.modify_resource)
-        p2_stone.quantity = 1300 # TODO magic number
-        p2_stone.tribute_list = 2 # TODO magic number
-        p2_stone.player_source = 2
-        p2_stone.item_id = -1
-        p2_stone.operation = ChangeVarOp.set_op.value # TODO rename enum
+        for player in (1, 2):
+            util_triggers.add_effect_modify_res(rts.init, player, 1300,
+                                                util_triggers.ACC_ATTR_STONE)
 
         p3_units = util_units.get_units_array(self._scn, 3)
         units_in_area = util_units.units_in_area(p3_units, 0.0, 0.0, 80.0, 80.0)
@@ -1296,27 +1255,19 @@ class ScnData:
 
         # Begin changes ownership.
         p3_units = util_units.get_units_array(self._scn, 3)
-        # TODO remove magic numbers
         daut_units = util_units.units_in_area(p3_units, 0.0, 0.0, 80.0, 80.0)
         for unit in daut_units:
             if util_units.get_unit_constant(unit) == FLAG_A_UCONST:
                 continue
             pos = util_units.get_x(unit) + util_units.get_y(unit)
-            player_target = 1 if pos < 80.0 else 2 # TODO remove magic number
-            change_to_player = rts.begin.add_effect(effects.change_ownership)
-            change_to_player.number_of_units_selected = 1
-            change_to_player.player_source = 3
-            change_to_player.player_target = player_target
-            uid = util_units.get_id(unit)
-            change_to_player.selected_object_id = uid
+            player_target = 1 if pos < 80.0 else 2
+            util_triggers.add_effect_change_own_unit(
+                rts.begin, 3, player_target, util_units.get_id(unit))
         for k, flag_uids in enumerate((DC_FLAGS_P1, DC_FLAGS_P2)):
             player_target = k + 1
             for uid in flag_uids:
-                change_flag = rts.begin.add_effect(effects.change_ownership)
-                change_flag.number_of_units_selected = 1
-                change_flag.player_source = 3
-                change_flag.player_target = player_target
-                change_flag.selected_object_id = uid
+                util_triggers.add_effect_change_own_unit(
+                    rts.begin, 3, player_target, uid)
 
         # p1 constructs castle
         p1_builds_castle = self._add_trigger(p1_builds_castle_name)
@@ -1394,18 +1345,9 @@ class ScnData:
         util_triggers.set_effect_area(change_2_to_3, 0, 0, 79, 79)
 
         # Removes stone after round is over
-        p1_stone_remove = rts.cleanup.add_effect(effects.modify_resource)
-        p1_stone_remove.quantity = 0 # TODO magic number
-        p1_stone_remove.tribute_list = 2 # TODO magic number
-        p1_stone_remove.player_source = 1
-        p1_stone_remove.item_id = -1
-        p1_stone_remove.operation = ChangeVarOp.set_op.value # TODO rename enum
-        p2_stone_remove = rts.cleanup.add_effect(effects.modify_resource)
-        p2_stone_remove.quantity = 0 # TODO magic number
-        p2_stone_remove.tribute_list = 2 # TODO magic number
-        p2_stone_remove.player_source = 2
-        p2_stone_remove.item_id = -1
-        p2_stone_remove.operation = ChangeVarOp.set_op.value # TODO rename enum
+        for player in (1, 2):
+            util_triggers.add_effect_modify_res(
+                rts.cleanup, player, 0, util_triggers.ACC_ATTR_STONE)
 
     def _add_castle_siege(self, index: int) -> None:
         """
@@ -1426,41 +1368,24 @@ class ScnData:
         # if index == 1 or isinstance(self._events[index-1], Minigame):
         #     self._add_activate(init_name, REVEALER_FIGHT_CREATE_NAME)
 
-        p1_stone = rts.init.add_effect(effects.modify_resource)
-        p1_stone.quantity = 650 # TODO magic number
-        p1_stone.tribute_list = 2 # TODO magic number
-        p1_stone.player_source = 1
-        p1_stone.item_id = -1
-        p1_stone.operation = ChangeVarOp.set_op.value # TODO rename enum
-        p2_stone = rts.init.add_effect(effects.modify_resource)
-        p2_stone.quantity = 650 # TODO magic number
-        p2_stone.tribute_list = 2 # TODO magic number
-        p2_stone.player_source = 2
-        p2_stone.item_id = -1
-        p2_stone.operation = ChangeVarOp.set_op.value # TODO rename enum
-
         for player in (1, 2):
             change_view = rts.init.add_effect(effects.change_view)
             change_view.player_source = player
-            # TODO remove magic numbers
             change_view.location_x = 120
             change_view.location_y = 40
+            util_triggers.add_effect_modify_res(
+                rts.init, player, 650, util_triggers.ACC_ATTR_STONE)
 
-        # TODO refactor splitting ownership down the middle
         # Begin changes ownership
         p3_units = util_units.get_units_array(self._scn, 3)
         cs_units = util_units.units_in_area(p3_units, 80.0, 0, 160.0, 80.0)
         unit_player_pairs = []
         for unit in cs_units:
             pos = util_units.get_x(unit) + util_units.get_y(unit)
-            player_target = 1 if pos < 160.0 else 2
-            change_to_player = rts.begin.add_effect(effects.change_ownership)
-            change_to_player.number_of_units_selected = 1
-            change_to_player.player_source = 3
-            change_to_player.player_target = player_target
+            target = 1 if pos < 160.0 else 2
             uid = util_units.get_id(unit)
-            change_to_player.selected_object_id = uid
-            unit_player_pairs.append((uid, player_target))
+            util_triggers.add_effect_change_own_unit(rts.begin, 3, target, uid)
+            unit_player_pairs.append((uid, target))
 
         # p2 loses castle
         p2_loses_castle = self._add_trigger(p2_loses_castle_name)
@@ -1528,18 +1453,9 @@ class ScnData:
             change_from_player.selected_object_id = uid
 
         # Removes stone after round is over
-        p1_stone_remove = rts.cleanup.add_effect(effects.modify_resource)
-        p1_stone_remove.quantity = 0 # TODO magic number
-        p1_stone_remove.tribute_list = 2 # TODO magic number
-        p1_stone_remove.player_source = 1
-        p1_stone_remove.item_id = -1
-        p1_stone_remove.operation = ChangeVarOp.set_op.value # TODO rename enum
-        p2_stone_remove = rts.cleanup.add_effect(effects.modify_resource)
-        p2_stone_remove.quantity = 0
-        p2_stone_remove.tribute_list = 2 # TODO magic number
-        p2_stone_remove.player_source = 2
-        p2_stone_remove.item_id = -1
-        p2_stone_remove.operation = ChangeVarOp.set_op.value # TODO rename enum
+        for player in (1, 2):
+            util_triggers.add_effect_modify_res(
+                rts.cleanup, player, 0, util_triggers.ACC_ATTR_STONE)
 
     def _add_fight(self, index: int, f: Fight) -> None:
         """Adds the fight with the given index."""
@@ -1554,24 +1470,15 @@ class ScnData:
         self._add_activate(rts.names.begin, rts.names.p1_wins)
         self._add_activate(rts.names.begin, rts.names.p2_wins)
 
-        # TODO think more about how to structure p1 and p2 wins triggers
         self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
         self._add_activate(rts.names.p1_wins, rts.names.cleanup)
         self._add_effect_p1_score(rts.p1_wins, self._events[index].p1_bonus)
-        p2_pop_0 = rts.p1_wins.add_condition(conditions.accumulate_attribute)
-        p2_pop_0.amount_or_quantity = 1
-        p2_pop_0.resource_type_or_tribute_list = ACC_ATTR_POP_HEADROOM
-        p2_pop_0.player = 2
-        p2_pop_0.inverted = True
+        util_triggers.add_cond_pop0(rts.p1_wins, 2)
 
         self._add_deactivate(rts.names.p2_wins, rts.names.p1_wins)
         self._add_activate(rts.names.p2_wins, rts.names.cleanup)
         self._add_effect_p2_score(rts.p2_wins, self._events[index].p2_bonus)
-        p1_pop_0 = rts.p2_wins.add_condition(conditions.accumulate_attribute)
-        p1_pop_0.amount_or_quantity = 1
-        p1_pop_0.resource_type_or_tribute_list = ACC_ATTR_POP_HEADROOM
-        p1_pop_0.player = 1
-        p1_pop_0.inverted = True
+        util_triggers.add_cond_pop0(rts.p2_wins, 1)
 
         for unit in f.p1_units:
             self._add_fight_unit(index, unit, 1, rts)
@@ -1594,20 +1501,11 @@ class ScnData:
         util_units.set_x(u, MAP_WIDTH - 0.5)
         util_units.set_y(u, 0.5)
 
-        # Init handles teleportation.
-        teleport = rts.init.add_effect(effects.teleport_object)
-        teleport.number_of_units_selected = 1
-        teleport.player_source = 3
-        teleport.selected_object_id = uid
-        teleport.location_x = util_units.get_x(unit)
-        teleport.location_y = util_units.get_y(unit)
+        util_triggers.add_effect_teleport(rts.init, uid, util_units.get_x(unit),
+                                          util_units.get_y(unit), 3)
 
         # Begin handles ownership changes.
-        change_own = rts.begin.add_effect(effects.change_ownership)
-        change_own.number_of_units_selected = 1
-        change_own.player_source = 3
-        change_own.player_target = from_player
-        change_own.selected_object_id = uid
+        util_triggers.add_effect_change_own_unit(rts.begin, 3, from_player, uid)
 
         # Changes points (using the player number).
         unit_name = util_units.get_name(u)
