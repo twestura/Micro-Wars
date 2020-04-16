@@ -625,7 +625,7 @@ class ScnData:
         # 3. AI Script Loaded
         #    * Condition: AI Signal 0
         #    * Disable Trigger: AI Script Not Loaded
-        # In lieu of this feature, we create a workaround by adding stone
+        # In lieu of this feature, we create a workaround by adding Stone
         # to the AI player and using an Accumulate Attribute condition to
         # disable the message and declare victory triggers.
         self._add_trigger_header('AI')
@@ -882,7 +882,6 @@ class ScnData:
         Checks _round_objective[index] contains an empty list.
         """
         assert self._round_objectives[index] == []
-        # TODO implement other minigames.
         if mg.name == 'Galley Micro':
             self._add_galley_micro_objectives(index)
         elif mg.name == 'DauT Castle':
@@ -986,8 +985,7 @@ class ScnData:
         obj_cs_p1.display_on_screen = True
         obj_cs_p1.description_order = 49
         obj_cs_p1.mute_objectives = True
-        p1_castle_destroyed = obj_cs_p1.add_condition(conditions.destroy_object)
-        p1_castle_destroyed.unit_object = CS_P1_CASTLE_ID
+        util_triggers.add_cond_hp0(obj_cs_p1, CS_P1_CASTLE_ID)
 
         obj_cs_p2_name = f'[O] Castle Siege Player 2 Castle Destroyed'
         self._round_objectives[index].append(obj_cs_p2_name)
@@ -999,8 +997,7 @@ class ScnData:
         obj_cs_p2.display_on_screen = True
         obj_cs_p2.description_order = 48
         obj_cs_p2.mute_objectives = True
-        p2_castle_destroyed = obj_cs_p2.add_condition(conditions.destroy_object)
-        p2_castle_destroyed.unit_object = CS_P2_CASTLE_ID
+        util_triggers.add_cond_hp0(obj_cs_p2, CS_P2_CASTLE_ID)
 
     def _add_victory_conditions(self):
         """
@@ -1387,10 +1384,12 @@ class ScnData:
             util_triggers.add_effect_change_own_unit(rts.begin, 3, target, uid)
             unit_player_pairs.append((uid, target))
 
+        # TODO disable these triggers, enable when the round begins
         # p2 loses castle
         p2_loses_castle = self._add_trigger(p2_loses_castle_name)
-        p2_c_cond = p2_loses_castle.add_condition(conditions.destroy_object)
-        p2_c_cond.unit_object = CS_P2_CASTLE_ID
+        p2_loses_castle.enabled = False
+        self._add_activate(rts.names.begin, p2_loses_castle_name)
+        util_triggers.add_cond_hp0(p2_loses_castle, CS_P2_CASTLE_ID)
         self._add_activate(p2_loses_castle_name, rts.names.p1_wins)
         self._add_deactivate(p2_loses_castle_name, p2_loses_army_name)
         self._add_deactivate(p2_loses_castle_name, p1_loses_castle_name)
@@ -1398,13 +1397,9 @@ class ScnData:
 
         # p2 loses army
         p2_loses_army = self._add_trigger(p2_loses_army_name)
-        for unit in cs_units:
-            pos = util_units.get_x(unit) + util_units.get_y(unit)
-            uid = util_units.get_id(unit)
-            if pos >= 160.0 and uid != CS_P2_CASTLE_ID:
-                p2_u_cond = p2_loses_army.add_condition(
-                    conditions.destroy_object)
-                p2_u_cond.unit_object = uid
+        p2_loses_army.enabled = False
+        self._add_activate(rts.names.begin, p2_loses_army_name)
+        util_triggers.add_cond_pop0(p2_loses_army, 2)
         self._add_activate(p2_loses_army_name, rts.names.p1_wins)
         self._add_deactivate(p2_loses_army_name, p1_loses_castle_name)
         self._add_deactivate(p2_loses_army_name, p1_loses_army_name)
@@ -1417,8 +1412,9 @@ class ScnData:
 
         # p1 loses castle
         p1_loses_castle = self._add_trigger(p1_loses_castle_name)
-        p1_c_cond = p1_loses_castle.add_condition(conditions.destroy_object)
-        p1_c_cond.unit_object = CS_P1_CASTLE_ID
+        p1_loses_castle.enabled = False
+        self._add_activate(rts.names.begin, p1_loses_castle_name)
+        util_triggers.add_cond_hp0(p1_loses_castle, CS_P1_CASTLE_ID)
         self._add_activate(p1_loses_castle_name, rts.names.p2_wins)
         self._add_deactivate(p1_loses_castle_name, p1_loses_army_name)
         self._add_deactivate(p1_loses_castle_name, p2_loses_castle_name)
@@ -1426,13 +1422,9 @@ class ScnData:
 
         # p1 loses army
         p1_loses_army = self._add_trigger(p1_loses_army_name)
-        for unit in cs_units:
-            pos = util_units.get_x(unit) + util_units.get_y(unit)
-            uid = util_units.get_id(unit)
-            if pos < 160.0 and uid != CS_P1_CASTLE_ID:
-                p1_u_cond = p1_loses_army.add_condition(
-                    conditions.destroy_object)
-                p1_u_cond.unit_object = uid
+        p1_loses_army.enabled = False
+        self._add_activate(rts.names.begin, p1_loses_army_name)
+        util_triggers.add_cond_pop0(p1_loses_army, 1)
         self._add_activate(p1_loses_army_name, rts.names.p2_wins)
         self._add_deactivate(p1_loses_army_name, p2_loses_castle_name)
         self._add_deactivate(p1_loses_army_name, p2_loses_army_name)

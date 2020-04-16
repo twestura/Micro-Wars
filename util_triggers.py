@@ -57,6 +57,21 @@ def add_cond_gaia_defeated(trigger: TriggerObject) -> None:
     gaia_defeated.player = 0
 
 
+def add_cond_hp0(trigger: TriggerObject, uid: int) -> None:
+    """
+    Adds a condition to trigger that the unit with id number uid
+    has 0 Hit Points.
+
+    This condition essentially is the same as a Destroy Object condition,
+    but it is satisfied at the beginning of a destruction animation,
+    rather than at the end.
+    """
+    hp0 = trigger.add_condition(conditions.object_hp)
+    hp0.amount_or_quantity = 0
+    hp0.comparison = VarValComp.equal.value
+    hp0.unit_object = uid
+
+
 def add_cond_pop0(trigger: TriggerObject, player: int) -> None:
     """Adds a condition to trigger that the player has population 0."""
     pop0 = trigger.add_condition(conditions.accumulate_attribute)
