@@ -32,7 +32,7 @@ GNU General Public License v3.0: See the LICENSE file.
 import argparse
 from collections import defaultdict
 import math
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Tuple
 from bidict import bidict
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
 from AoE2ScenarioParser.objects.trigger_obj import TriggerObject
@@ -148,27 +148,18 @@ TIEBREAKER_OBJ_NAME = '[O] Tiebreaker'
 UNIT_ID_MAP_REVEALER = 837
 
 
-# Pairs of integer (x, y) tiles at which to create map revealers.
-REVEALER_LOCATIONS = [
-    # (FIGHT_CENTER_X, FIGHT_CENTER_Y)
-    (x, y)
-    for x in range(FIGHT_CENTER_X - 18, FIGHT_CENTER_X + 19, 3)
-    for y in range(FIGHT_CENTER_Y - 18, FIGHT_CENTER_Y + 19, 3)
-]
-
-
 # Trigger name for creating map revealers for center fights.
 REVEALER_FIGHT_CREATE_NAME = '[I] Create Fight Map Revealers'
 
 
 # Trigger name for hiding map revealers for center fights.
-REVEALER_FIGHT_HIDE_NAME = '[I] Hide Fight Map Revealers'
+REVEALER_HIDE_NAME = '[I] Hide Map Revealers'
 
 
 # Unit ID of Flag A.
 FLAG_A_UCONST = 600
 
-# TODO remove unused flags
+
 # Unit ids for Player 1's flags around the DauT Castle hill.
 DC_FLAGS_P1 = [168, 149, 151, 153, 170, 155, 172, 178]
 
@@ -192,6 +183,22 @@ CS_P1_CASTLE_ID = 813
 
 # Unit ID for Player 2's Castle in the Castle Siege minigame.
 CS_P2_CASTLE_ID = 830
+
+
+# Center positions of minigames to be used when changing the view.
+MINIGAME_CENTERS = {
+    'Galley Micro': (119, 200),
+    'DauT Castle': (36, 36),
+    'Castle Siege': (120, 40),
+}
+
+
+def map_revealer_pos(pos: Tuple[int, int]) -> List[Tuple[int, int]]:
+    """Yields a set of map revealers locations centered around pos."""
+    x, y = pos
+    return [(a, b)
+            for a in range(x - 24, x + 25, 3)
+            for b in range(y - 24, y + 25, 3)]
 
 
 class _TriggerNames:
@@ -301,11 +308,14 @@ class _RoundTriggers:
         # Turns on the middle fight map revealers if the current
         # index is a fight and the revealers are currently off, that is,
         # if fight is the very first event or the previous event was
-        # a minigame.
-        if (isinstance(self._scn._events[index], Fight)
-                and (index == 1
-                     or isinstance(self._scn._events[index - 1], Minigame))):
+        # a minigame, or if the event is a minigame (which can't be repeated).
+        e = self._scn._events[index]
+        prev = self._scn._events[index - 1]
+        if isinstance(e, Fight) and (index == 1 or isinstance(prev, Minigame)):
             self._scn._add_activate(self.names.init, REVEALER_FIGHT_CREATE_NAME)
+        elif isinstance(self._scn._events[index], Minigame):
+            self._scn._add_activate(self.names.init,
+                                    self._scn._revealers[e.name])
 
         self._scn._research_techs(self._init, index)
 
@@ -327,10 +337,13 @@ class _RoundTriggers:
         # Disables the Round N/N counter for the final round.
         if index == self._scn.num_rounds:
             self._scn._add_deactivate(self.names.cleanup, ROUND_OBJ_NAME)
-        # TODO handle map revealers for minigames
-        elif isinstance(self._scn._events[index + 1], Minigame):
-            self._scn._add_activate(self.names.cleanup,
-                                    REVEALER_FIGHT_HIDE_NAME)
+
+        if ((isinstance(e, Fight)
+             and index != self._scn.num_rounds
+             and isinstance(self._scn._events[index + 1], Minigame)
+            ) or isinstance(e, Minigame)):
+            self._scn._add_activate(self.names.cleanup, REVEALER_HIDE_NAME)
+
         # Deactivates round-specific objectives
         obj_names = self._scn._round_objectives[index]
         for obj_name in obj_names:
@@ -433,6 +446,10 @@ class ScnData:
 
         # The set of technologies researched by the currently added triggers.
         self._researched_techs = set()
+
+        # Maps a minigame name to name of its create map revealer trigger.
+        # Also maps 'Fight' to the create fight map revealer trigger name.
+        self._revealers = dict()
 
     @property
     def num_rounds(self):
@@ -720,35 +737,52 @@ class ScnData:
             change_view.location_y = START_VIEW_Y
             change_view.scroll = False
 
-    def _create_map_revealer_triggers(self) -> None:
+    def _add_revealer_trigger(self, name: str) -> None:
         """
-        Creates a set of map revealers to cover the middle area.
-        Loops and disables itself.
-        Can be re-enabled to make additional map revealers.
+        Adds a create trigger for map revealers for the event given by name.
+
+        name is 'Fight' for a fight or the name of a minigame for a minigame.
+        Checks that name satisfies this precondition.
         """
-        create_revealers = self._add_trigger(REVEALER_FIGHT_CREATE_NAME)
+        assert name == 'Fight' or name in MINIGAME_CENTERS
+        create_name = f'[I] Create {name} Map Revealers'
+        self._revealers[name] = create_name
+        create_revealers = self._add_trigger(create_name)
         create_revealers.enabled = False
         create_revealers.looping = True
-        self._add_deactivate(REVEALER_FIGHT_CREATE_NAME,
-                             REVEALER_FIGHT_CREATE_NAME)
+        self._add_deactivate(create_name, create_name)
+        revealer_pos = map_revealer_pos((FIGHT_CENTER_X, FIGHT_CENTER_Y)
+                                        if name == 'Fight'
+                                        else MINIGAME_CENTERS[name])
         for player in (1, 2):
-            for (x, y) in REVEALER_LOCATIONS:
+            for (x, y) in revealer_pos:
                 create = create_revealers.add_effect(effects.create_object)
                 create.object_list_unit_id = UNIT_ID_MAP_REVEALER
                 create.player_source = player
                 create.location_x = x
                 create.location_y = y
 
-        hide_revealers = self._add_trigger(REVEALER_FIGHT_HIDE_NAME)
+    def _create_map_revealer_triggers(self) -> None:
+        """
+        Creates a set of map revealers to cover fight and minigame areas.
+        Loops and disables itself.
+        Can be re-enabled to make additional map revealers.
+
+        Also adds a "Hide" trigger that removes all map revealers on the map.
+        """
+        self._add_revealer_trigger('Fight')
+        for name in MINIGAME_CENTERS:
+            self._add_revealer_trigger(name)
+
+        hide_revealers = self._add_trigger(REVEALER_HIDE_NAME)
         hide_revealers.enabled = False
         hide_revealers.looping = True
-        self._add_deactivate(REVEALER_FIGHT_HIDE_NAME, REVEALER_FIGHT_HIDE_NAME)
+        self._add_deactivate(REVEALER_HIDE_NAME, REVEALER_HIDE_NAME)
         for player in (1, 2):
             remove = hide_revealers.add_effect(effects.remove_object)
             remove.player_source = player
-            x1, y1 = util.min_point(REVEALER_LOCATIONS)
-            x2, y2 = util.max_point(REVEALER_LOCATIONS)
-            util_triggers.set_effect_area(remove, x1, y1, x2, y2)
+            remove.object_list_unit_id = UNIT_ID_MAP_REVEALER
+            util_triggers.set_effect_area(remove, 0, 0, 239, 239)
 
     def _add_objectives(self) -> None:
         """
@@ -1159,13 +1193,12 @@ class ScnData:
         assert index
         rts = _RoundTriggers(self, index)
 
-        # TODO map revealers
-
         for player in (1, 2):
             change_view = rts.init.add_effect(effects.change_view)
             change_view.player_source = player
-            change_view.location_x = 120
-            change_view.location_y = 200
+            change_view.location_x, change_view.location_y = (
+                MINIGAME_CENTERS['Galley Micro']
+            )
 
         self._add_activate(rts.names.begin, rts.names.p1_wins)
         util_triggers.add_cond_pop0(rts.p1_wins, 2)
@@ -1219,11 +1252,6 @@ class ScnData:
         p2_builds_castle_name = f'{prefix} Player 2 Constructs Castle'
         p2_loses_army_name = f'{prefix} Player 2 Loses Army'
 
-        # Transitions map revealers.
-        # TODO make DauT Castle Map Revealers
-        # if index == 1 or isinstance(self._events[index-1], Minigame):
-        #     self._add_activate(init_name, REVEALER_FIGHT_CREATE_NAME)
-
         for player in (1, 2):
             util_triggers.add_effect_modify_res(rts.init, player, 1300,
                                                 util_triggers.ACC_ATTR_STONE)
@@ -1242,7 +1270,6 @@ class ScnData:
         # The min and max positions in which the Castle can be constructed.
         x1, y1 = (math.floor(pos) for pos in util.min_point(flag_positions))
         x2, y2 = (math.ceil(pos) for pos in util.max_point(flag_positions))
-        avg = util_units.avg_pos(flags)
         # Adjusts positions to keep the Castle strictly inside the flags.
         x1 += 3
         y1 += 3
@@ -1252,8 +1279,8 @@ class ScnData:
         for player in (1, 2):
             change_view = rts.init.add_effect(effects.change_view)
             change_view.player_source = player
-            change_view.location_x = round(avg[0])
-            change_view.location_y = round(avg[1])
+            change_view.location_x, change_view.location_y = (
+                MINIGAME_CENTERS['DauT Castle'])
 
         # Begin changes ownership.
         p3_units = util_units.get_units_array(self._scn, 3)
@@ -1359,16 +1386,11 @@ class ScnData:
         p2_loses_castle_name = f'{prefix} Player 2 Loses Castle'
         p2_loses_army_name = f'{prefix} Player 2 Loses Army'
 
-        # Transitions map revealers.
-        # TODO make Castle Siege Map Revealers
-        # if index == 1 or isinstance(self._events[index-1], Minigame):
-        #     self._add_activate(init_name, REVEALER_FIGHT_CREATE_NAME)
-
         for player in (1, 2):
             change_view = rts.init.add_effect(effects.change_view)
             change_view.player_source = player
-            change_view.location_x = 120
-            change_view.location_y = 40
+            change_view.location_x, change_view.location_y = (
+                MINIGAME_CENTERS['Castle Siege'])
             util_triggers.add_effect_modify_res(
                 rts.init, player, 650, util_triggers.ACC_ATTR_STONE)
 
