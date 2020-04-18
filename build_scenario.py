@@ -415,7 +415,12 @@ class _RoundTriggers:
 
         self._inc = self._scn._add_trigger(self.names.inc)
         self._inc.enabled = False
-        util_triggers.add_cond_timer(self._inc, DELAY_ROUND_AFTER)
+        delay_after = DELAY_ROUND_AFTER
+        # Hard codes a longer delay for Castle Siege so the destruction
+        # animation can play.
+        if isinstance(e, Minigame) and e.name == 'Castle Siege':
+            delay_after += 5
+        util_triggers.add_cond_timer(self._inc, delay_after)
 
         if index:
             change_round = self._inc.add_effect(effects.change_variable)
