@@ -4,6 +4,37 @@ Creates files for the Micro Wars scenario.
 GNU General Public License v3.0: See the LICENSE file.
 """
 
+# # TODO no, I need to or these conditions together as separate triggers.
+# # I'll have one of them set a variable for which player has the most
+# # relics, then disable the other triggers
+# num_relics = len(RELIC_UIDS_TEMP)
+# for i in range(num_relics + 1):
+#     j = num_relics - i
+#     # i is the number of relics for p1, j is the number of relics for p2
+#     for trigger in (obj_ctr_p1, obj_ctr_p2):
+#         if i:
+#             p1 = trigger.add_condition(conditions.accumulate_attribute)
+#             p1.amount_or_quantity = i
+#             p1.resource_type_or_tribute_list = (
+#                 util_triggers.ACC_ATTR_RELICS)
+#             p1.player = 1
+#         if j:
+#             p2 = trigger.add_condition(conditions.accumulate_attribute)
+#             p2.amount_or_quantity = j
+#             p2.resource_type_or_tribute_list = (
+#                 util_triggers.ACC_ATTR_RELICS)
+#             p2.player = 2
+
+# Two binary-valued variables:
+# p1-more-relics
+# p2-more-relics
+# These variables are the conditions for the objective display for ctr.
+# There are then 10 triggers for which player has the most relics
+# Each disables the other triggers when fired, increments the variable,
+# awards points to the players, and activates either p1-wins or p2-wins.
+
+# Will need two more sets of "or" triggers for activating each round:
+# 3 total relics captured and 6 total relics captured.
 
 # Notes on coordinates:
 # Unit coordinates are stored as float (x, y).
@@ -62,6 +93,10 @@ UNIT_TEMPLATE = 'unit-template.aoe2scenario'
 OUTPUT = 'Micro Wars.aoe2scenario'
 
 
+# Default scenario from where to pull the Arena units.
+ARENA_TEMPLATE = 'arena-units.aoe2scenario'
+
+
 # The number of scenario editor variables.
 NUM_VARIABLES = 256
 
@@ -75,6 +110,8 @@ INITIAL_VARIABLES = [
     ('p1-wins', 0),
     ('p2-wins', 0),
     ('round', 0),
+    ('p1-most-relics', 0),
+    ('p2-most-relics', 0),
 ]
 
 
@@ -156,6 +193,22 @@ REVEALER_FIGHT_CREATE_NAME = '[I] Create Fight Map Revealers'
 REVEALER_HIDE_NAME = '[I] Hide Map Revealers'
 
 
+# Unit constant for a Monk.
+UCONST_MONK = 125
+
+
+# Unit constant for a Relic.
+UCONST_RELIC = 285
+
+
+# Positions of the Relics in the Capture the Relic minigame.
+RELIC_POSITIONS = {(28, 125), (35, 132), (48, 112)}
+
+
+# The number of relics captured at the end of a round of Capture the Relic.
+ROUND_RELICS = {1: 3, 2: 6, 3: 9}
+
+
 # Unit ID of Flag A.
 FLAG_A_UCONST = 600
 
@@ -188,6 +241,7 @@ CS_P2_CASTLE_ID = 830
 # Center positions of minigames to be used when changing the view.
 MINIGAME_CENTERS = {
     'Galley Micro': (119, 200),
+    'Capture the Relic': (40, 120),
     'DauT Castle': (36, 36),
     'Castle Siege': (120, 40),
 }
@@ -317,6 +371,14 @@ class _RoundTriggers:
             self._scn._add_activate(self.names.init,
                                     self._scn._revealers[e.name])
 
+        center_pos = (MINIGAME_CENTERS[e.name]
+                      if isinstance(e, Minigame)
+                      else (FIGHT_CENTER_X, FIGHT_CENTER_Y))
+        for player in (1, 2):
+            change_view = self._init.add_effect(effects.change_view)
+            change_view.player_source = player
+            change_view.location_x, change_view.location_y = center_pos
+
         self._scn._research_techs(self._init, index)
 
         self._scn._add_activate(self.names.init, self.names.begin)
@@ -327,8 +389,10 @@ class _RoundTriggers:
 
         self._p1_wins = self._scn._add_trigger(self.names.p1_wins)
         self._p1_wins.enabled = False
+        self._scn._add_activate(self.names.p1_wins, self.names.cleanup)
         self._p2_wins = self._scn._add_trigger(self.names.p2_wins)
         self._p2_wins.enabled = False
+        self._scn._add_activate(self.names.p2_wins, self.names.cleanup)
 
         self._cleanup = self._scn._add_trigger(self.names.cleanup)
         self._cleanup.enabled = False
@@ -421,7 +485,7 @@ class ScnData:
     """
 
     # TODO annotate the type of the events list
-    def __init__(self, scn: AoE2Scenario, events):
+    def __init__(self, scn: AoE2Scenario, events, arena: AoE2Scenario):
         """Initializes a new ScnData object for the scenario scn."""
         self._scn = scn
         self._events = events
@@ -450,6 +514,8 @@ class ScnData:
         # Maps a minigame name to name of its create map revealer trigger.
         # Also maps 'Fight' to the create fight map revealer trigger name.
         self._revealers = dict()
+
+        self._arena = arena
 
     @property
     def num_rounds(self):
@@ -595,6 +661,9 @@ class ScnData:
             name = e.name
             if name == 'Galley Micro':
                 techs = ['fletching']
+            elif name == 'Capture the Relic':
+                techs = ['castle_age', 'crossbowman', 'fletching',
+                         'bodkin_arrow']
             elif name == 'DauT Castle':
                 techs = ['loom', 'castle_age', 'crossbowman',
                          'elite_skirmisher', 'fletching', 'bodkin_arrow',
@@ -918,6 +987,8 @@ class ScnData:
         assert self._round_objectives[index] == []
         if mg.name == 'Galley Micro':
             self._add_galley_micro_objectives(index)
+        elif mg.name == 'Capture the Relic':
+            self._add_ctr_objectives(index)
         elif mg.name == 'DauT Castle':
             self._add_daut_castle_objectives(index)
         elif mg.name == 'Castle Siege':
@@ -926,7 +997,7 @@ class ScnData:
             raise AssertionError(f'Minigame {mg.name} not implemented.')
 
     def _add_galley_micro_objectives(self, index: int) -> None:
-        """Adds the objectives for the Galley Micro minigame"""
+        """Adds the objectives for the Galley Micro minigame."""
         obj_galley_name = f'[O] Round {index} Galley Micro'
         self._round_objectives[index].append(obj_galley_name)
         obj_galley = self._add_trigger(obj_galley_name)
@@ -938,6 +1009,48 @@ class ScnData:
         obj_galley.description_order = 50
         obj_galley.mute_objectives = True
         util_triggers.add_cond_gaia_defeated(obj_galley)
+
+    def _add_ctr_objectives(self, index: int) -> None:
+        """Adds the objectives for the Capture the Relic minigame."""
+        obj_ctr_name = f'[O] Round {index} Capture the Relic'
+        self._round_objectives[index].append(obj_ctr_name)
+        obj_ctr = self._add_trigger(obj_ctr_name)
+        obj_ctr.enabled = False
+        obj_ctr.description = 'Capturing a Relic is worth 10 points. There are 3 rounds, each with 3 relics to capture. Capturing the most relics in total is worth an additional 10 points.' # pylint: disable=line-too-long
+        obj_ctr.display_as_objective = True
+        obj_ctr.description_order = 50
+        obj_ctr.mute_objectives = True
+        util_triggers.add_cond_gaia_defeated(obj_ctr)
+
+        obj_ctr_p1_name = f'[O] Capture the Relic Player 1 Relics'
+        self._round_objectives[index].append(obj_ctr_p1_name)
+        obj_ctr_p1 = self._add_trigger(obj_ctr_p1_name)
+        obj_ctr_p1.enabled = False
+        obj_ctr_p1.description = 'Player 1: <Relics Captured, 1> / 9 Relics'
+        obj_ctr_p1.short_description = 'P1: <Relics Captured, 1> / 9 Relics'
+        obj_ctr_p1.display_as_objective = True
+        obj_ctr_p1.display_on_screen = True
+        obj_ctr_p1.description_order = 49
+        obj_ctr_p1.mute_objectives = True
+        obj_ctr_p1_var = obj_ctr_p1.add_condition(conditions.variable_value)
+        obj_ctr_p1_var.amount_or_quantity = 1
+        obj_ctr_p1_var.variable = self._var_ids['p1-most-relics']
+        obj_ctr_p1_var.comparison = VarValComp.equal.value
+
+        obj_ctr_p2_name = f'[O] Capture the Relic Player 2 Relics'
+        self._round_objectives[index].append(obj_ctr_p2_name)
+        obj_ctr_p2 = self._add_trigger(obj_ctr_p2_name)
+        obj_ctr_p2.enabled = False
+        obj_ctr_p2.description = 'Player 2: <Relics Captured, 2> / 9 Relics'
+        obj_ctr_p2.short_description = 'P2: <Relics Captured, 2> / 9 Relics'
+        obj_ctr_p2.display_as_objective = True
+        obj_ctr_p2.display_on_screen = True
+        obj_ctr_p2.description_order = 48
+        obj_ctr_p2.mute_objectives = True
+        obj_ctr_p2_var = obj_ctr_p2.add_condition(conditions.variable_value)
+        obj_ctr_p2_var.amount_or_quantity = 1
+        obj_ctr_p2_var.variable = self._var_ids['p2-most-relics']
+        obj_ctr_p2_var.comparison = VarValComp.equal.value
 
     def _add_daut_castle_objectives(self, index: int):
         """Adds the objectives for the DauT Castle minigame."""
@@ -1177,6 +1290,8 @@ class ScnData:
         """Adds the minigame mg with the given index."""
         if mg.name == 'Galley Micro':
             self._add_galley_micro(index)
+        elif mg.name == 'Capture the Relic':
+            self._add_ctr(index)
         elif mg.name == 'DauT Castle':
             self._add_daut_castle(index)
         elif mg.name == 'Castle Siege':
@@ -1193,13 +1308,6 @@ class ScnData:
         assert index
         rts = _RoundTriggers(self, index)
 
-        for player in (1, 2):
-            change_view = rts.init.add_effect(effects.change_view)
-            change_view.player_source = player
-            change_view.location_x, change_view.location_y = (
-                MINIGAME_CENTERS['Galley Micro']
-            )
-
         self._add_activate(rts.names.begin, rts.names.p1_wins)
         util_triggers.add_cond_pop0(rts.p1_wins, 2)
         self._add_activate(rts.names.begin, rts.names.p2_wins)
@@ -1211,9 +1319,8 @@ class ScnData:
         for galley in galleys:
             pos = util_units.get_x(galley) + util_units.get_y(galley)
             player = 1 if pos < 320 else 2
-            util_triggers.add_effect_change_own_unit(rts.begin, 3, player,
-                                                     util_units.get_id(galley))
-
+            util_triggers.add_effect_change_own_unit(
+                rts.begin, 3, player, util_units.get_id(galley))
             uid = util_units.get_id(galley)
             change_pts_name = f'{prefix} P{player} loses Galley ({uid})'
             change_pts = self._add_trigger(change_pts_name)
@@ -1231,9 +1338,260 @@ class ScnData:
             util_triggers.add_effect_remove_obj(rts.cleanup, uid, player)
 
         self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
-        self._add_activate(rts.names.p1_wins, rts.names.cleanup)
         self._add_deactivate(rts.names.p2_wins, rts.names.p1_wins)
-        self._add_activate(rts.names.p2_wins, rts.names.cleanup)
+
+    def _add_ctr(self, index: int) -> None:
+        """
+        Adds the Capture the Relic minigame at the given index.
+
+        Checks index is not 0 (cannot use a minigame as the tiebreaker).
+        """
+        assert index
+        rts = _RoundTriggers(self, index)
+
+        prefix = f'[R{index}]'
+
+        util_triggers.add_effect_modify_res(
+            rts.init, 10000, util_triggers.ACC_ATTR_GOLD)
+
+        begin2_name = f'{prefix} Capture the Relic Begin Round 2'
+        begin3_name = f'{prefix} Capture the Relic Begin Round 3'
+        create_relics_name = f'{prefix} Capture the Relic Create Relics'
+        round_cleanup_name = f'{prefix} Capture the Relic Round Cleanup'
+
+        r1_cond_names = [f'{prefix} Capture the Relic {i}-{ROUND_RELICS[1]-i}'
+                         for i in range(ROUND_RELICS[1] + 1)]
+
+        r2_cond_names = [f'{prefix} Capture the Relic {i}-{ROUND_RELICS[2]-i}'
+                         for i in range(ROUND_RELICS[2] + 1)]
+
+        r3_cond_names = [f'{prefix} Capture the Relic {i}-{ROUND_RELICS[3]-i}'
+                         for i in range(ROUND_RELICS[3] + 1)]
+
+        p1_template = util_units.get_units_array(self._arena, 1)
+        p2_template = util_units.get_units_array(self._arena, 2)
+
+        p1_pos = (19, 100)
+        p2_pos = (59, 141)
+
+        begin2 = self._add_trigger(begin2_name)
+        begin2.enabled = False
+        util_triggers.add_cond_timer(begin2, 3)
+        for tech_name in ['sanctity', 'redemption']:
+            self._add_effect_research_tech(begin2, tech_name)
+        begin3 = self._add_trigger(begin3_name)
+        begin3.enabled = False
+        util_triggers.add_cond_timer(begin3, 3)
+        self._add_effect_research_tech(begin3, 'atonement')
+
+        # R1 - P1
+        r1p1 = util_units.units_in_area(p1_template, 0.0, 0.0, 10.0, 10.0)
+        for unit in r1p1:
+            u = util_units.copy_unit(self._scn, unit, 3)
+            uid = util_units.get_id(u)
+            util_units.set_x(u, MAP_WIDTH - 0.5)
+            util_units.set_y(u, 0.5)
+            x = int(util_units.get_x(unit)) - 0 + p1_pos[0]
+            y = int(util_units.get_y(unit)) - 0 + p1_pos[1]
+            util_triggers.add_effect_teleport(rts.begin, uid, x, y, 3)
+            util_triggers.add_effect_change_own_unit(rts.begin, 3, 1, uid)
+
+        # R1 - P2
+        r1p2 = util_units.units_in_area(p2_template, 10.0, 0.0, 20.0, 10.0)
+        for unit in r1p2:
+            u = util_units.copy_unit(self._scn, unit, 3)
+            uid = util_units.get_id(u)
+            util_units.set_x(u, MAP_WIDTH - 0.5)
+            util_units.set_y(u, 0.5)
+            x = int(util_units.get_x(unit)) - 19 + p2_pos[0]
+            y = int(util_units.get_y(unit)) - 9 + p2_pos[1]
+            util_triggers.add_effect_teleport(rts.begin, uid, x, y, 3)
+            util_triggers.add_effect_change_own_unit(rts.begin, 3, 2, uid)
+
+        # R2 - P1
+        r2p1 = util_units.units_in_area(p1_template, 0.0, 10.0, 10.0, 20.0)
+        for unit in r2p1:
+            u = util_units.copy_unit(self._scn, unit, 3)
+            uid = util_units.get_id(u)
+            util_units.set_x(u, MAP_WIDTH - 0.5)
+            util_units.set_y(u, 0.5)
+            x = int(util_units.get_x(unit)) - 0 + p1_pos[0]
+            y = int(util_units.get_y(unit)) - 10 + p1_pos[1]
+            util_triggers.add_effect_teleport(begin2, uid, x, y, 3)
+            util_triggers.add_effect_change_own_unit(begin2, 3, 1, uid)
+
+        # R2 - P2
+        r2p2 = util_units.units_in_area(p2_template, 10.0, 10.0, 20.0, 20.0)
+        for unit in r2p2:
+            u = util_units.copy_unit(self._scn, unit, 3)
+            uid = util_units.get_id(u)
+            util_units.set_x(u, MAP_WIDTH - 0.5)
+            util_units.set_y(u, 0.5)
+            x = int(util_units.get_x(unit)) - 19 + p2_pos[0]
+            y = int(util_units.get_y(unit)) - 19 + p2_pos[1]
+            util_triggers.add_effect_teleport(begin2, uid, x, y, 3)
+            util_triggers.add_effect_change_own_unit(begin2, 3, 2, uid)
+
+        # R3 - P1
+        r3p1 = util_units.units_in_area(p1_template, 0.0, 20.0, 10.0, 30.0)
+        for unit in r3p1:
+            u = util_units.copy_unit(self._scn, unit, 3)
+            uid = util_units.get_id(u)
+            util_units.set_x(u, MAP_WIDTH - 0.5)
+            util_units.set_y(u, 0.5)
+            x = int(util_units.get_x(unit)) - 0 + p1_pos[0]
+            y = int(util_units.get_y(unit)) - 20 + p1_pos[1]
+            util_triggers.add_effect_teleport(begin3, uid, x, y, 3)
+            util_triggers.add_effect_change_own_unit(begin3, 3, 1, uid)
+
+        # R3 - P2
+        r3p2 = util_units.units_in_area(p2_template, 10.0, 20.0, 20.0, 30.0)
+        for unit in r3p2:
+            u = util_units.copy_unit(self._scn, unit, 3)
+            uid = util_units.get_id(u)
+            util_units.set_x(u, MAP_WIDTH - 0.5)
+            util_units.set_y(u, 0.5)
+            x = int(util_units.get_x(unit)) - 19 + p2_pos[0]
+            y = int(util_units.get_y(unit)) - 29 + p2_pos[1]
+            util_triggers.add_effect_teleport(begin3, uid, x, y, 3)
+            util_triggers.add_effect_change_own_unit(begin3, 3, 2, uid)
+
+        change_own_p1 = rts.begin.add_effect(effects.change_ownership)
+        change_own_p1.player_source = 3
+        change_own_p1.player_target = 1
+        util_triggers.set_effect_area(change_own_p1, 0, 80, 39, 119)
+
+        change_own_p2 = rts.begin.add_effect(effects.change_ownership)
+        change_own_p2.player_source = 3
+        change_own_p2.player_target = 2
+        util_triggers.set_effect_area(change_own_p2, 40, 120, 79, 159)
+
+        create_relics = self._add_trigger(create_relics_name)
+        create_relics.enabled = False
+        create_relics.looping = True
+        self._add_deactivate(create_relics_name, create_relics_name)
+        for x, y in RELIC_POSITIONS:
+            create = create_relics.add_effect(effects.create_object)
+            create.player_source = 0
+            create.location_x = x
+            create.location_y = y
+            create.object_list_unit_id = UCONST_RELIC
+
+        for name in (rts.names.begin, begin2_name, begin3_name):
+            self._add_activate(name, create_relics_name)
+
+        # Additional consts consists of Monks and all units added by
+        # the Arena template scenario.
+        p1_tmp = util_units.get_units_array(self._arena, 1)
+        p2_tmp = util_units.get_units_array(self._arena, 2)
+        additional_consts = {UCONST_MONK}
+        for uarray in (p1_tmp, p2_tmp):
+            for u in uarray:
+                uconst = util_units.get_unit_constant(u)
+                additional_consts.add(uconst)
+
+        round_cleanup = self._add_trigger(round_cleanup_name)
+        round_cleanup.enabled = False
+        round_cleanup.looping = True
+        self._add_deactivate(round_cleanup_name, round_cleanup_name)
+        for player in (1, 2):
+            for uconst in additional_consts:
+                remove = round_cleanup.add_effect(effects.remove_object)
+                remove.player_source = player
+                remove.object_list_unit_id = uconst
+                util_triggers.set_effect_area(remove, 0, 80, 79, 159)
+
+        # Capturing 3 relics activates round 2.
+        for i, name in enumerate(r1_cond_names):
+            j = ROUND_RELICS[1] - i
+            relics1 = self._add_trigger(name)
+            relics1.enabled = False
+            self._add_activate(rts.names.begin, name)
+            if i:
+                acci = relics1.add_condition(conditions.accumulate_attribute)
+                acci.amount_or_quantity = i
+                acci.resource_type_or_tribute_list = (
+                    util_triggers.ACC_ATTR_RELICS)
+                acci.player = 1
+            if j:
+                accj = relics1.add_condition(conditions.accumulate_attribute)
+                accj.amount_or_quantity = j
+                accj.resource_type_or_tribute_list = (
+                    util_triggers.ACC_ATTR_RELICS)
+                accj.player = 2
+            for n in r1_cond_names:
+                if name != n:
+                    self._add_deactivate(name, n)
+            self._add_activate(name, round_cleanup_name)
+            self._add_activate(name, begin2_name)
+
+        # Capturing 6 relics activates round 3.
+        for i, name in enumerate(r2_cond_names):
+            j = ROUND_RELICS[2] - i
+            relics2 = self._add_trigger(name)
+            relics2.enabled = False
+            self._add_activate(begin2_name, name)
+            if i:
+                acci = relics2.add_condition(conditions.accumulate_attribute)
+                acci.amount_or_quantity = i
+                acci.resource_type_or_tribute_list = (
+                    util_triggers.ACC_ATTR_RELICS)
+                acci.player = 1
+            if j:
+                accj = relics2.add_condition(conditions.accumulate_attribute)
+                accj.amount_or_quantity = j
+                accj.resource_type_or_tribute_list = (
+                    util_triggers.ACC_ATTR_RELICS)
+                accj.player = 2
+            for n in r2_cond_names:
+                if name != n:
+                    self._add_deactivate(name, n)
+            self._add_activate(name, round_cleanup_name)
+            self._add_activate(name, begin3_name)
+
+        # Capturing 9 relics checks which player wins and awards points.
+        for i, name in enumerate(r3_cond_names):
+            j = ROUND_RELICS[3] - i
+            relics3 = self._add_trigger(name)
+            relics3.enabled = False
+            self._add_activate(begin3_name, name)
+            if i:
+                acci = relics3.add_condition(conditions.accumulate_attribute)
+                acci.amount_or_quantity = i
+                acci.resource_type_or_tribute_list = (
+                    util_triggers.ACC_ATTR_RELICS)
+                acci.player = 1
+            if j:
+                accj = relics3.add_condition(conditions.accumulate_attribute)
+                accj.amount_or_quantity = j
+                accj.resource_type_or_tribute_list = (
+                    util_triggers.ACC_ATTR_RELICS)
+                accj.player = 2
+            if i > j:
+                self._add_activate(name, rts.names.p1_wins)
+                self._add_effect_p1_score(relics3, 10)
+            else:
+                self._add_activate(name, rts.names.p2_wins)
+                self._add_effect_p2_score(relics3, 10)
+            self._add_effect_p1_score(relics3, i * 10)
+            self._add_effect_p2_score(relics3, j * 10)
+            for n in r3_cond_names:
+                if name != n:
+                    self._add_deactivate(name, n)
+            self._add_activate(name, round_cleanup_name)
+
+        # Cleanup removes units from player control.
+        change_1_to_3 = rts.cleanup.add_effect(effects.change_ownership)
+        change_1_to_3.player_source = 1
+        change_1_to_3.player_target = 3
+        util_triggers.set_effect_area(change_1_to_3, 0, 80, 79, 159)
+        change_2_to_3 = rts.cleanup.add_effect(effects.change_ownership)
+        change_2_to_3.player_source = 2
+        change_2_to_3.player_target = 3
+        util_triggers.set_effect_area(change_2_to_3, 0, 80, 79, 159)
+
+        util_triggers.add_effect_modify_res(
+            rts.cleanup, 0, util_triggers.ACC_ATTR_GOLD)
 
 
     def _add_daut_castle(self, index: int) -> None:
@@ -1252,9 +1610,8 @@ class ScnData:
         p2_builds_castle_name = f'{prefix} Player 2 Constructs Castle'
         p2_loses_army_name = f'{prefix} Player 2 Loses Army'
 
-        for player in (1, 2):
-            util_triggers.add_effect_modify_res(rts.init, player, 1300,
-                                                util_triggers.ACC_ATTR_STONE)
+        util_triggers.add_effect_modify_res(
+            rts.init, 1300, util_triggers.ACC_ATTR_STONE)
 
         p3_units = util_units.get_units_array(self._scn, 3)
         units_in_area = util_units.units_in_area(p3_units, 0.0, 0.0, 80.0, 80.0)
@@ -1275,12 +1632,6 @@ class ScnData:
         y1 += 3
         x2 -= 3
         y2 -= 3
-
-        for player in (1, 2):
-            change_view = rts.init.add_effect(effects.change_view)
-            change_view.player_source = player
-            change_view.location_x, change_view.location_y = (
-                MINIGAME_CENTERS['DauT Castle'])
 
         # Begin changes ownership.
         p3_units = util_units.get_units_array(self._scn, 3)
@@ -1323,9 +1674,7 @@ class ScnData:
         self._add_deactivate(p2_loses_army_name, p2_builds_castle_name)
 
         # p1 wins
-        rts.p1_wins.enabled = False
         self._add_effect_p1_score(rts.p1_wins, event.MAX_POINTS)
-        self._add_activate(p1_wins_name, rts.names.cleanup)
 
         # p2 constructs castle
         p2_builds_castle = self._add_trigger(p2_builds_castle_name)
@@ -1352,9 +1701,7 @@ class ScnData:
         self._add_deactivate(p1_loses_army_name, p1_builds_castle_name)
 
         # p2 wins
-        rts.p2_wins.enabled = False
         self._add_effect_p2_score(rts.p2_wins, event.MAX_POINTS)
-        self._add_activate(p2_wins_name, rts.names.cleanup)
 
         # Cleanup removes units from player control.
         change_1_to_3 = rts.cleanup.add_effect(effects.change_ownership)
@@ -1368,9 +1715,8 @@ class ScnData:
         util_triggers.set_effect_area(change_2_to_3, 0, 0, 79, 79)
 
         # Removes stone after round is over
-        for player in (1, 2):
-            util_triggers.add_effect_modify_res(
-                rts.cleanup, player, 0, util_triggers.ACC_ATTR_STONE)
+        util_triggers.add_effect_modify_res(
+            rts.cleanup, 0, util_triggers.ACC_ATTR_STONE)
 
     def _add_castle_siege(self, index: int) -> None:
         """
@@ -1386,13 +1732,8 @@ class ScnData:
         p2_loses_castle_name = f'{prefix} Player 2 Loses Castle'
         p2_loses_army_name = f'{prefix} Player 2 Loses Army'
 
-        for player in (1, 2):
-            change_view = rts.init.add_effect(effects.change_view)
-            change_view.player_source = player
-            change_view.location_x, change_view.location_y = (
-                MINIGAME_CENTERS['Castle Siege'])
-            util_triggers.add_effect_modify_res(
-                rts.init, player, 650, util_triggers.ACC_ATTR_STONE)
+        util_triggers.add_effect_modify_res(
+            rts.init, 650, util_triggers.ACC_ATTR_STONE)
 
         # Begin changes ownership
         p3_units = util_units.get_units_array(self._scn, 3)
@@ -1428,7 +1769,6 @@ class ScnData:
         # p1 wins
         rts.p1_wins.enabled = False
         self._add_effect_p1_score(rts.p1_wins, event.MAX_POINTS)
-        self._add_activate(rts.names.p1_wins, rts.names.cleanup)
 
         # p1 loses castle
         p1_loses_castle = self._add_trigger(p1_loses_castle_name)
@@ -1453,7 +1793,6 @@ class ScnData:
         # p2 wins
         rts.p2_wins.enabled = False
         self._add_effect_p2_score(rts.p2_wins, event.MAX_POINTS)
-        self._add_activate(rts.names.p2_wins, rts.names.cleanup)
 
         # Cleanup removes units from player control.
         for uid, player_source in unit_player_pairs:
@@ -1465,30 +1804,21 @@ class ScnData:
             change_from_player.selected_object_id = uid
 
         # Removes stone after round is over
-        for player in (1, 2):
-            util_triggers.add_effect_modify_res(
-                rts.cleanup, player, 0, util_triggers.ACC_ATTR_STONE)
+        util_triggers.add_effect_modify_res(
+            rts.cleanup, 0, util_triggers.ACC_ATTR_STONE)
 
     def _add_fight(self, index: int, f: Fight) -> None:
         """Adds the fight with the given index."""
         rts = _RoundTriggers(self, index)
 
-        for player in (1, 2):
-            change_view = rts.init.add_effect(effects.change_view)
-            change_view.player_source = player
-            change_view.location_x = FIGHT_CENTER_X
-            change_view.location_y = FIGHT_CENTER_Y
-
         self._add_activate(rts.names.begin, rts.names.p1_wins)
         self._add_activate(rts.names.begin, rts.names.p2_wins)
 
         self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
-        self._add_activate(rts.names.p1_wins, rts.names.cleanup)
         self._add_effect_p1_score(rts.p1_wins, self._events[index].p1_bonus)
         util_triggers.add_cond_pop0(rts.p1_wins, 2)
 
         self._add_deactivate(rts.names.p2_wins, rts.names.p1_wins)
-        self._add_activate(rts.names.p2_wins, rts.names.cleanup)
         self._add_effect_p2_score(rts.p2_wins, self._events[index].p2_bonus)
         util_triggers.add_cond_pop0(rts.p2_wins, 1)
 
@@ -1542,6 +1872,7 @@ class ScnData:
 def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
                    unit_template: str = UNIT_TEMPLATE,
                    event_json: str = event.DEFAULT_FILE,
+                   arena_template: str = ARENA_TEMPLATE,
                    output: str = OUTPUT):
     """
     Builds the scenario.
@@ -1553,12 +1884,13 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
         unit_template: A template of unit formations to copy for fights.
         output: The output path to which the resulting scenario is written.
     """
+    scn = AoE2Scenario(scenario_template)
     units_scn = AoE2Scenario(unit_template)
     fight_data_list = event.load_fight_data(event_json)
     events = event.make_fights(units_scn, fight_data_list,
                                (FIGHT_CENTER_X, FIGHT_CENTER_Y), FIGHT_OFFSET)
-    scn = AoE2Scenario(scenario_template)
-    scn_data = ScnData(scn, events)
+    arena_scn = AoE2Scenario(arena_template)
+    scn_data = ScnData(scn, events, arena_scn)
     scn_data.setup_scenario()
     scn_data.write_to_file(output)
 
@@ -1568,6 +1900,7 @@ def call_build_scenario(args):
     scenario_map = args.map[0]
     units_scn = args.units[0]
     event_json = args.events[0]
+    arena_scn = args.arena[0]
     out = args.output[0]
 
     # Checks the output path is different from all input paths.
@@ -1578,6 +1911,8 @@ def call_build_scenario(args):
         matches.append('units')
     if out == event_json:
         matches.append('events')
+    if out == arena_scn:
+        matches.append('arena')
     if matches:
         conflicts = ', '.join(matches)
         msg = f"The output path '{out}' conflicts with: {conflicts}."
@@ -1597,19 +1932,37 @@ def build_publish_files(args):
 
 def scratch(args): # pylint: disable=unused-argument
     """Runs a simple test experiment."""
-    scratch_path = 'scratch.aoe2scenario'
-    print(scratch_path)
+    # scratch_path = 'scratch.aoe2scenario'
     scn = AoE2Scenario(SCENARIO_TEMPLATE)
+    # scn = AoE2Scenario(OUTPUT)
     p3_units = util_units.get_units_array(scn, 3)
-    p3_units = util_units.units_in_area(p3_units, 0, 0, 80, 80)
-    flags = [u for u in p3_units
-             if util_units.get_unit_constant(u) == FLAG_A_UCONST]
-    flags.sort(key=lambda u: (util_units.get_x(u), util_units.get_y(u)))
-    for flag in flags:
-        x = util_units.get_x(flag)
-        y = util_units.get_y(flag)
-        unit_id = util_units.get_id(flag)
-        print(f'id: {unit_id} - ({x}, {y})')
+    for u in p3_units:
+        if util_units.get_unit_constant(u) == 748:
+            x = util_units.get_x(u)
+            y = util_units.get_y(u)
+            print(f'({x}, {y})')
+    # arena_scn = AoE2Scenario(ARENA_TEMPLATE)
+
+    # print('Player 1')
+    # p1_units = util_units.get_units_array(arena_scn, 1)
+    # for unit in p1_units:
+    #     name = util_units.get_name(unit)
+    #     uconst = util_units.get_unit_constant(unit)
+    #     unit_id = util_units.get_id(unit)
+    #     x = int(util_units.get_x(unit))
+    #     y = int(util_units.get_y(unit))
+    #     print(f'{name}, const: {uconst}, id: {unit_id} - ({x}, {y})')
+
+    # print('Player 2')
+    # p2_units = util_units.get_units_array(arena_scn, 2)
+    # for unit in p2_units:
+    #     name = util_units.get_name(unit)
+    #     uconst = util_units.get_unit_constant(unit)
+    #     unit_id = util_units.get_id(unit)
+    #     x = int(util_units.get_x(unit))
+    #     y = int(util_units.get_y(unit))
+    #     if 20 <= y < 30:
+    #         print(f'{name}, const: {uconst}, id: {unit_id} - ({x}, {y})')
 
 
 def main():
@@ -1623,6 +1976,8 @@ def main():
                               help='Filepath to the unit template input file.')
     parser_build.add_argument('--events', nargs=1, default=[event.DEFAULT_FILE],
                               help='Filepath to the event json file.')
+    parser_build.add_argument('--arena', nargs=1, default=[ARENA_TEMPLATE],
+                              help='Filepath to the arena units file.')
     parser_build.add_argument('--output', '-o', nargs=1, default=[OUTPUT],
                               help='Filepath to which the output is written, must differ from all input files.') #pylint: disable=line-too-long
     parser_build.set_defaults(func=call_build_scenario)

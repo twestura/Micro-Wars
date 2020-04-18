@@ -12,8 +12,16 @@ from AoE2ScenarioParser.objects.effect_obj import EffectObject
 from AoE2ScenarioParser.objects.trigger_obj import TriggerObject
 
 
-# Index of stone in the accumulate attribute condition list.
+# Index of Stone in the accumulate attribute condition list.
 ACC_ATTR_STONE = 2
+
+
+# Index of Gold in the accumulate attribute condition list.
+ACC_ATTR_GOLD = 3
+
+
+# Index of Captured Relics in the accumulate attribute condition list.
+ACC_ATTR_RELICS = 7
 
 
 # Index of population headroom in the accumulate attribute condition list.
@@ -116,18 +124,19 @@ def add_effect_delcare_victory(trigger: TriggerObject, player: int) -> None:
     declare_victory.player_source = player
 
 
-def add_effect_modify_res(trigger: TriggerObject, player: int, quantity: int,
+def add_effect_modify_res(trigger: TriggerObject, quantity: int,
                           tribute_list: int) -> None:
     """
-    Adds an effect to trigger to set the player's resource at the
-    index given by tribute_list to quantity.
+    Adds an effect to trigger to set the quantity of resource at the
+    index given by tribute_list for players 1 and 2.
     """
-    modify_res = trigger.add_effect(effects.modify_resource)
-    modify_res.player_source = player
-    modify_res.quantity = quantity
-    modify_res.tribute_list = tribute_list
-    modify_res.item_id = -1
-    modify_res.operation = ChangeVarOp.set_op.value
+    for player in (1, 2):
+        modify_res = trigger.add_effect(effects.modify_resource)
+        modify_res.player_source = player
+        modify_res.quantity = quantity
+        modify_res.tribute_list = tribute_list
+        modify_res.item_id = -1
+        modify_res.operation = ChangeVarOp.set_op.value
 
 
 def add_effect_remove_obj(trigger: TriggerObject, unit_id: int,

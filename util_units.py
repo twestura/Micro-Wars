@@ -50,10 +50,10 @@ def get_units_array(scenario: AoE2Scenario, player: int) -> List[UnitStruct]:
     """
     Returns the array of units in scenario for the given player.
 
-    Raises a ValueError if player is not in 1, ..., 8.
+    Raises a ValueError if player is not in 0, ..., 8.
     """
-    if player < 1 or player > 8:
-        msg = f'Player number {player} is not between 1 and 8 (inclusive).'
+    if player < 0 or player > 8:
+        msg = f'Player number {player} is not between 0 and 8 (inclusive).'
         raise ValueError(msg)
     player_units = scenario.parsed_data['UnitsPiece'].retrievers[4].data[player]
     unit_array = player_units.retrievers[1].data
