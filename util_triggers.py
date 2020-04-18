@@ -46,6 +46,13 @@ class VarValComp(Enum):
     larger_or_equal = 4
 
 
+class TimerUnits(Enum):
+    """Represents the units in which time is displayed."""
+    years = 0
+    minutes = 1
+    seconds = 2
+
+
 def add_cond_destroy_obj(trigger: TriggerObject, unit_id: int) -> None:
     """
     Adds a condition to trigger that the unit with id unit_id is destroyed.

@@ -29,6 +29,7 @@
             "spearman": 3
         }
     },
+    "Xbow Timer",
     {
         "techs": ["castle_age", "bodkin_arrow"],
         "points": {

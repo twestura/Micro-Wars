@@ -93,7 +93,11 @@ UNIT_TEMPLATE = 'unit-template.aoe2scenario'
 OUTPUT = 'Micro Wars.aoe2scenario'
 
 
-# Default scenario from where to pull the Arena units.
+# Default scenario from which to pull the Xbow Timer units.
+XBOW_TEMPLATE = 'xbow-timer-template.aoe2scenario'
+
+
+# Default scenario from which to pull the Arena units.
 ARENA_TEMPLATE = 'arena-units.aoe2scenario'
 
 
@@ -193,6 +197,18 @@ REVEALER_FIGHT_CREATE_NAME = '[I] Create Fight Map Revealers'
 REVEALER_HIDE_NAME = '[I] Hide Map Revealers'
 
 
+# Unit constant for an Archer.
+UCONST_ARCHER = 4
+
+
+# Unit constant for a Skirmisher.
+UCONST_SKIRM = 7
+
+
+# Unit constant for a Crossbowman.
+UCONST_XBOW = 24
+
+
 # Unit constant for a Monk.
 UCONST_MONK = 125
 
@@ -241,6 +257,7 @@ CS_P2_CASTLE_ID = 830
 # Center positions of minigames to be used when changing the view.
 MINIGAME_CENTERS = {
     'Galley Micro': (119, 200),
+    'Xbow Timer': (40, 200),
     'Capture the Relic': (40, 120),
     'DauT Castle': (36, 36),
     'Castle Siege': (120, 40),
@@ -490,7 +507,8 @@ class ScnData:
     """
 
     # TODO annotate the type of the events list
-    def __init__(self, scn: AoE2Scenario, events, arena: AoE2Scenario):
+    def __init__(self, scn: AoE2Scenario, events, xbow_scn: AoE2Scenario,
+                 arena: AoE2Scenario):
         """Initializes a new ScnData object for the scenario scn."""
         self._scn = scn
         self._events = events
@@ -520,6 +538,10 @@ class ScnData:
         # Also maps 'Fight' to the create fight map revealer trigger name.
         self._revealers = dict()
 
+        # Scenario for the Xbow Timer template units.
+        self._xbow_scn = xbow_scn
+
+        # Scenario for the arena template units.
         self._arena = arena
 
     @property
@@ -666,6 +688,8 @@ class ScnData:
             name = e.name
             if name == 'Galley Micro':
                 techs = ['fletching']
+            elif name == 'Xbow Timer':
+                techs = ['feudal_age', 'fletching']
             elif name == 'Capture the Relic':
                 techs = ['castle_age', 'crossbowman', 'fletching',
                          'bodkin_arrow']
@@ -682,7 +706,6 @@ class ScnData:
             techs = e.techs
         for tech in techs:
             self._add_effect_research_tech(trigger, tech)
-
 
     def _name_variables(self) -> None:
         """Sets the names for trigger variables in the scenario."""
@@ -992,6 +1015,8 @@ class ScnData:
         assert self._round_objectives[index] == []
         if mg.name == 'Galley Micro':
             self._add_galley_micro_objectives(index)
+        elif mg.name == 'Xbow Timer':
+            self._add_xbow_timer_objectives(index)
         elif mg.name == 'Capture the Relic':
             self._add_ctr_objectives(index)
         elif mg.name == 'DauT Castle':
@@ -1014,6 +1039,21 @@ class ScnData:
         obj_galley.description_order = 50
         obj_galley.mute_objectives = True
         util_triggers.add_cond_gaia_defeated(obj_galley)
+
+    def _add_xbow_timer_objectives(self, index: int) -> None:
+        """Adds the objectives the Xbow Timer minigame."""
+        obj_xbow_name = f'[O] Round {index} Xbow Timer'
+        self._round_objectives[index].append(obj_xbow_name)
+        obj_xbow = self._add_trigger(obj_xbow_name)
+        obj_xbow.enabled = False
+        obj_xbow.description = '* Archer: 1\n* Crossbowman: 1\n* Skirmisher: 1'
+        obj_xbow.short_description = (
+            '* Archer: 1\n* Crossbowman: 1\n* Skirmisher: 1')
+        obj_xbow.display_as_objective = True
+        obj_xbow.display_on_screen = True
+        obj_xbow.description_order = 50
+        obj_xbow.mute_objectives = True
+        util_triggers.add_cond_gaia_defeated(obj_xbow)
 
     def _add_ctr_objectives(self, index: int) -> None:
         """Adds the objectives for the Capture the Relic minigame."""
@@ -1295,6 +1335,8 @@ class ScnData:
         """Adds the minigame mg with the given index."""
         if mg.name == 'Galley Micro':
             self._add_galley_micro(index)
+        elif mg.name == 'Xbow Timer':
+            self._add_xbow_timer(index)
         elif mg.name == 'Capture the Relic':
             self._add_ctr(index)
         elif mg.name == 'DauT Castle':
@@ -1345,6 +1387,252 @@ class ScnData:
         self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
         self._add_deactivate(rts.names.p2_wins, rts.names.p1_wins)
 
+    def _add_xbow_timer(self, index: int) -> None:
+        """
+        Adds the Xbow Timer minigame at the given index.
+
+        Checks index is not 0 (cannot use a minigame as the tiebreaker).
+        """
+        assert index
+        rts = _RoundTriggers(self, index)
+
+        prefix = f'[R{index}]'
+
+        cleanup1_name = f'{prefix} Xbow Timer Cleanup Round 1'
+        init2_name = f'{prefix} Xbow Timer Init Round 2'
+        begin2_name = f'{prefix} Xbow Timer Begin Round 2'
+
+        p1_r1_win_name = f'{prefix} Xbow Timer Player 1 Wins Round 1'
+        p2_r1_win_name = f'{prefix} Xbow Timer Player 2 Wins Round 1'
+
+        res_xbow_1_name = f'{prefix} Xbow Timer Research Player 1'
+        res_xbow_2_name = f'{prefix} Xbow Timer Research Player 2'
+
+        timer_r1 = rts.begin.add_effect(effects.display_timer)
+        timer_r1.variable_or_timer = 0
+        timer_r1.time_unit = util_triggers.TimerUnits.minutes.value
+        timer_r1.display_time = 2
+        timer_r1.message = '<BLUE>%d until Crossbowman.'
+        res_xbow_1 = self._add_trigger(res_xbow_1_name)
+        res_xbow_1.enabled = False
+        util_triggers.add_cond_timer(res_xbow_1, 120)
+        self._add_activate(rts.names.begin, res_xbow_1_name)
+        xbow1 = res_xbow_1.add_effect(effects.replace_object)
+        xbow1.player_source = 1
+        xbow1.player_target = 1
+        xbow1.object_list_unit_id = UCONST_ARCHER
+        xbow1.object_list_unit_id_2 = UCONST_XBOW
+        util_triggers.set_effect_area(xbow1, 0, 160, 79, 239)
+        bodkin1_attack = res_xbow_1.add_effect(effects.change_object_attack)
+        bodkin1_attack.aa_quantity = 1
+        bodkin1_attack.aa_armor_or_attack_type = 3
+        bodkin1_attack.player_source = 1
+        bodkin1_attack.object_list_unit_id = UCONST_XBOW
+        bodkin1_attack.operation = util_triggers.ChangeVarOp.add.value
+        util_triggers.set_effect_area(bodkin1_attack, 0, 160, 79, 239)
+        bodkin1_range = res_xbow_1.add_effect(effects.change_object_range)
+        bodkin1_range.quantity = 1
+        bodkin1_range.player_source = 1
+        bodkin1_range.object_list_unit_id = UCONST_XBOW
+        bodkin1_range.operation = util_triggers.ChangeVarOp.add.value
+        util_triggers.set_effect_area(bodkin1_range, 0, 160, 79, 239)
+
+        cleanup1 = self._add_trigger(cleanup1_name)
+        cleanup1.enabled = False
+        util_triggers.add_cond_timer(cleanup1, DELAY_CLEANUP)
+        for clean in (cleanup1, rts.cleanup):
+            for player in (1, 2):
+                clean_a = clean.add_effect(effects.remove_object)
+                clean_a.player_source = player
+                clean_a.object_list_unit_id = UCONST_ARCHER
+                util_triggers.set_effect_area(clean_a, 0, 160, 79, 239)
+                clean_c = clean.add_effect(effects.remove_object)
+                clean_c.player_source = player
+                clean_c.object_list_unit_id = UCONST_XBOW
+                util_triggers.set_effect_area(clean_c, 0, 160, 79, 239)
+                clean_s = clean.add_effect(effects.remove_object)
+                clean_s.player_source = player
+                clean_s.object_list_unit_id = UCONST_SKIRM
+                util_triggers.set_effect_area(clean_s, 0, 160, 79, 239)
+        self._add_activate(cleanup1_name, init2_name)
+
+        init2 = self._add_trigger(init2_name)
+        init2.enabled = False
+        util_triggers.add_cond_timer(init2, DELAY_ROUND_AFTER)
+        self._add_activate(init2_name, begin2_name)
+
+        begin2 = self._add_trigger(begin2_name)
+        begin2.enabled = False
+        util_triggers.add_cond_timer(begin2, DELAY_ROUND_BEFORE)
+        self._add_activate(begin2_name, rts.names.p1_wins)
+        self._add_activate(begin2_name, rts.names.p2_wins)
+
+        archers = util_units.get_units_array(self._xbow_scn, 1)
+        archers = util_units.units_in_area(archers, 0.0, 80.0, 160.0, 240.0)
+        skirms = util_units.get_units_array(self._xbow_scn, 2)
+        skirms = util_units.units_in_area(skirms, 0.0, 80.0, 160.0, 240.0)
+
+        p1_r1_win = self._add_trigger(p1_r1_win_name)
+        p1_r1_win.enabled = False
+        self._add_activate(rts.names.begin, p1_r1_win_name)
+        self._add_deactivate(p2_r1_win_name, p1_r1_win_name)
+        util_triggers.add_cond_pop0(p1_r1_win, 2)
+        self._add_effect_p1_score(p1_r1_win, 50 - len(skirms))
+        self._add_activate(p1_r1_win_name, cleanup1_name)
+        clear_timer_p1_r1 = p1_r1_win.add_effect(effects.clear_timer)
+        clear_timer_p1_r1.variable_or_timer = 0
+        self._add_deactivate(p1_r1_win_name, res_xbow_1_name)
+
+        p2_r1_win = self._add_trigger(p2_r1_win_name)
+        p2_r1_win.enabled = False
+        self._add_activate(rts.names.begin, p2_r1_win_name)
+        self._add_deactivate(p1_r1_win_name, p2_r1_win_name)
+        util_triggers.add_cond_pop0(p2_r1_win, 1)
+        self._add_effect_p2_score(p2_r1_win, 50 - len(archers))
+        self._add_activate(p2_r1_win_name, cleanup1_name)
+        clear_timer_p2_r1 = p2_r1_win.add_effect(effects.clear_timer)
+        clear_timer_p2_r1.variable_or_timer = 0
+        self._add_deactivate(p2_r1_win_name, res_xbow_1_name)
+
+        # Round 1
+        for unit in archers:
+            archer = util_units.copy_unit(self._scn, unit, 3)
+            uid = util_units.get_id(archer)
+            x = int(util_units.get_x(archer))
+            y = int(util_units.get_y(archer))
+            util_triggers.add_effect_teleport(rts.init, uid, x, y, 3)
+            util_triggers.add_effect_change_own_unit(rts.begin, 3, 1, uid)
+            util_units.set_x(archer, MAP_WIDTH - 0.5)
+            util_units.set_y(archer, 0.5)
+            change_pts_name = f'{prefix} P1 loses Archer ({uid})'
+            change_pts = self._add_trigger(change_pts_name)
+            change_pts.enabled = False
+            self._add_activate(rts.names.begin, change_pts_name)
+            util_triggers.add_cond_destroy_obj(change_pts, uid)
+            self._add_deactivate(cleanup1_name, change_pts_name)
+            self._add_effect_p2_score(change_pts, 1)
+
+        for unit in skirms:
+            skirm = util_units.copy_unit(self._scn, unit, 3)
+            uid = util_units.get_id(skirm)
+            x = int(util_units.get_x(skirm))
+            y = int(util_units.get_y(skirm))
+            util_triggers.add_effect_teleport(rts.init, uid, x, y, 3)
+            skirm_pa = rts.init.add_effect(effects.change_object_armor)
+            skirm_pa.aa_quantity = 1
+            skirm_pa.aa_armor_or_attack_type = 3
+            skirm_pa.number_of_units_selected = 1
+            skirm_pa.player_source = 3
+            skirm_pa.selected_object_id = uid
+            skirm_ma = rts.init.add_effect(effects.change_object_armor)
+            skirm_ma.aa_quantity = 1
+            skirm_ma.aa_armor_or_attack_type = 4
+            skirm_ma.number_of_units_selected = 1
+            skirm_ma.player_source = 3
+            skirm_ma.selected_object_id = uid
+            util_triggers.add_effect_change_own_unit(rts.begin, 3, 2, uid)
+            util_units.set_x(skirm, MAP_WIDTH - 0.5)
+            util_units.set_y(skirm, 0.5)
+            change_pts_name = f'{prefix} P2 loses Skirmisher ({uid})'
+            change_pts = self._add_trigger(change_pts_name)
+            change_pts.enabled = False
+            self._add_activate(rts.names.begin, change_pts_name)
+            util_triggers.add_cond_destroy_obj(change_pts, uid)
+            self._add_deactivate(cleanup1_name, change_pts_name)
+            self._add_effect_p1_score(change_pts, 1)
+
+        # Round 2
+        for unit in archers:
+            archer = util_units.copy_unit(self._scn, unit, 3)
+            uid = util_units.get_id(archer)
+            x = int(util_units.get_x(archer))
+            y = int(util_units.get_y(archer))
+            util_triggers.add_effect_teleport(init2, uid, x, y, 3)
+            util_triggers.add_effect_change_own_unit(begin2, 3, 2, uid)
+            util_units.set_x(archer, MAP_WIDTH - 0.5)
+            util_units.set_y(archer, 0.5)
+            change_pts_name = f'{prefix} P2 loses Archer ({uid})'
+            change_pts = self._add_trigger(change_pts_name)
+            change_pts.enabled = False
+            self._add_activate(begin2_name, change_pts_name)
+            util_triggers.add_cond_destroy_obj(change_pts, uid)
+            self._add_deactivate(rts.names.p2_wins, change_pts_name)
+            self._add_effect_p1_score(change_pts, 1)
+
+        for unit in skirms:
+            skirm = util_units.copy_unit(self._scn, unit, 3)
+            uid = util_units.get_id(skirm)
+            x = int(util_units.get_x(skirm))
+            y = int(util_units.get_y(skirm))
+            util_triggers.add_effect_teleport(init2, uid, x, y, 3)
+            skirm_pa = init2.add_effect(effects.change_object_armor)
+            skirm_pa.aa_quantity = 1
+            skirm_pa.aa_armor_or_attack_type = 3
+            skirm_pa.number_of_units_selected = 1
+            skirm_pa.player_source = 3
+            skirm_pa.selected_object_id = uid
+            skirm_ma = init2.add_effect(effects.change_object_armor)
+            skirm_ma.aa_quantity = 1
+            skirm_ma.aa_armor_or_attack_type = 4
+            skirm_ma.number_of_units_selected = 1
+            skirm_ma.player_source = 3
+            skirm_ma.selected_object_id = uid
+            util_triggers.add_effect_change_own_unit(begin2, 3, 1, uid)
+            util_units.set_x(skirm, MAP_WIDTH - 0.5)
+            util_units.set_y(skirm, 0.5)
+            change_pts_name = f'{prefix} P1 loses Skirmisher ({uid})'
+            change_pts = self._add_trigger(change_pts_name)
+            change_pts.enabled = False
+            self._add_activate(begin2_name, change_pts_name)
+            util_triggers.add_cond_destroy_obj(change_pts, uid)
+            self._add_deactivate(rts.names.p1_wins, change_pts_name)
+            self._add_effect_p2_score(change_pts, 1)
+
+        timer_r2 = begin2.add_effect(effects.display_timer)
+        timer_r2.variable_or_timer = 0
+        timer_r2.time_unit = util_triggers.TimerUnits.minutes.value
+        timer_r2.display_time = 2
+        timer_r2.message = '<RED>%d until Crossbowman.'
+        res_xbow_2 = self._add_trigger(res_xbow_2_name)
+        res_xbow_2.enabled = False
+        util_triggers.add_cond_timer(res_xbow_2, 120)
+        self._add_activate(begin2_name, res_xbow_2_name)
+        xbow2 = res_xbow_2.add_effect(effects.replace_object)
+        xbow2.player_source = 2
+        xbow2.player_target = 2
+        xbow2.object_list_unit_id = UCONST_ARCHER
+        xbow2.object_list_unit_id_2 = UCONST_XBOW
+        util_triggers.set_effect_area(xbow1, 0, 160, 79, 239)
+        bodkin2_attack = res_xbow_2.add_effect(effects.change_object_attack)
+        bodkin2_attack.aa_quantity = 1
+        bodkin2_attack.aa_armor_or_attack_type = 3
+        bodkin2_attack.player_source = 2
+        bodkin2_attack.object_list_unit_id = UCONST_XBOW
+        bodkin2_attack.operation = util_triggers.ChangeVarOp.add.value
+        util_triggers.set_effect_area(bodkin1_attack, 0, 160, 79, 239)
+        bodkin2_range = res_xbow_2.add_effect(effects.change_object_range)
+        bodkin2_range.quantity = 1
+        bodkin2_range.player_source = 2
+        bodkin2_range.object_list_unit_id = UCONST_XBOW
+        bodkin2_range.operation = util_triggers.ChangeVarOp.add.value
+        util_triggers.set_effect_area(bodkin1_range, 0, 160, 79, 239)
+
+        # Player 1 Wins Round 2
+        util_triggers.add_cond_pop0(rts.p1_wins, 2)
+        self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
+        self._add_effect_p1_score(rts.p1_wins, 50 - len(archers))
+        clear_timer_p1_r2 = rts.p1_wins.add_effect(effects.clear_timer)
+        clear_timer_p1_r2.variable_or_timer = 0
+        self._add_deactivate(rts.names.p1_wins, res_xbow_2_name)
+
+        # Player 2 Wins Round 2
+        util_triggers.add_cond_pop0(rts.p2_wins, 1)
+        self._add_deactivate(rts.names.p2_wins, rts.names.p1_wins)
+        self._add_effect_p2_score(rts.p2_wins, 50 - len(skirms))
+        clear_timer_p2_r2 = rts.p2_wins.add_effect(effects.clear_timer)
+        clear_timer_p2_r2.variable_or_timer = 0
+        self._add_deactivate(rts.names.p2_wins, res_xbow_2_name)
+
     def _add_ctr(self, index: int) -> None:
         """
         Adds the Capture the Relic minigame at the given index.
@@ -1353,6 +1641,8 @@ class ScnData:
         """
         assert index
         rts = _RoundTriggers(self, index)
+
+        # TODO disable Monastery techs
 
         prefix = f'[R{index}]'
 
@@ -1730,6 +2020,7 @@ class ScnData:
         Checks the index is not 0 (cannot us a minigame as the tiebreaker).
         """
         assert index
+        # TODO disable Castle units and techs
         prefix = f'[R{index}]' if index else '[T]'
         rts = _RoundTriggers(self, index)
         p1_loses_castle_name = f'{prefix} Player 1 Loses Castle'
@@ -1877,6 +2168,7 @@ class ScnData:
 def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
                    unit_template: str = UNIT_TEMPLATE,
                    event_json: str = event.DEFAULT_FILE,
+                   xbow_template: str = XBOW_TEMPLATE,
                    arena_template: str = ARENA_TEMPLATE,
                    output: str = OUTPUT):
     """
@@ -1894,8 +2186,9 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
     fight_data_list = event.load_fight_data(event_json)
     events = event.make_fights(units_scn, fight_data_list,
                                (FIGHT_CENTER_X, FIGHT_CENTER_Y), FIGHT_OFFSET)
+    xbow_scn = AoE2Scenario(xbow_template)
     arena_scn = AoE2Scenario(arena_template)
-    scn_data = ScnData(scn, events, arena_scn)
+    scn_data = ScnData(scn, events, xbow_scn, arena_scn)
     scn_data.setup_scenario()
     scn_data.write_to_file(output)
 
@@ -1905,6 +2198,7 @@ def call_build_scenario(args):
     scenario_map = args.map[0]
     units_scn = args.units[0]
     event_json = args.events[0]
+    xbow_scn = args.xbow[0]
     arena_scn = args.arena[0]
     out = args.output[0]
 
@@ -1916,6 +2210,8 @@ def call_build_scenario(args):
         matches.append('units')
     if out == event_json:
         matches.append('events')
+    if out == xbow_scn:
+        matches.append('xbow')
     if out == arena_scn:
         matches.append('arena')
     if matches:
@@ -1937,37 +2233,9 @@ def build_publish_files(args):
 
 def scratch(args): # pylint: disable=unused-argument
     """Runs a simple test experiment."""
+    pass
     # scratch_path = 'scratch.aoe2scenario'
-    scn = AoE2Scenario(SCENARIO_TEMPLATE)
-    # scn = AoE2Scenario(OUTPUT)
-    p3_units = util_units.get_units_array(scn, 3)
-    for u in p3_units:
-        if util_units.get_unit_constant(u) == 748:
-            x = util_units.get_x(u)
-            y = util_units.get_y(u)
-            print(f'({x}, {y})')
-    # arena_scn = AoE2Scenario(ARENA_TEMPLATE)
-
-    # print('Player 1')
-    # p1_units = util_units.get_units_array(arena_scn, 1)
-    # for unit in p1_units:
-    #     name = util_units.get_name(unit)
-    #     uconst = util_units.get_unit_constant(unit)
-    #     unit_id = util_units.get_id(unit)
-    #     x = int(util_units.get_x(unit))
-    #     y = int(util_units.get_y(unit))
-    #     print(f'{name}, const: {uconst}, id: {unit_id} - ({x}, {y})')
-
-    # print('Player 2')
-    # p2_units = util_units.get_units_array(arena_scn, 2)
-    # for unit in p2_units:
-    #     name = util_units.get_name(unit)
-    #     uconst = util_units.get_unit_constant(unit)
-    #     unit_id = util_units.get_id(unit)
-    #     x = int(util_units.get_x(unit))
-    #     y = int(util_units.get_y(unit))
-    #     if 20 <= y < 30:
-    #         print(f'{name}, const: {uconst}, id: {unit_id} - ({x}, {y})')
+    # scn = AoE2Scenario(SCENARIO_TEMPLATE)
 
 
 def main():
@@ -1981,6 +2249,8 @@ def main():
                               help='Filepath to the unit template input file.')
     parser_build.add_argument('--events', nargs=1, default=[event.DEFAULT_FILE],
                               help='Filepath to the event json file.')
+    parser_build.add_argument('--xbow', nargs=1, default=[XBOW_TEMPLATE],
+                              help='Filepath to the xbow timer units file.')
     parser_build.add_argument('--arena', nargs=1, default=[ARENA_TEMPLATE],
                               help='Filepath to the arena units file.')
     parser_build.add_argument('--output', '-o', nargs=1, default=[OUTPUT],
