@@ -36,6 +36,15 @@
         }
     },
     {
+        "techs": [],
+        "points": {
+            "archer": 6,
+            "scout_cavalry": 5,
+            "spearman": 4,
+            "skirmisher": 5
+        }
+    },
+    {
         "techs": ["bloodlines"],
         "points": {
             "archer": 2,

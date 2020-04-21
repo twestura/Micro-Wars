@@ -6,58 +6,104 @@
         }
     },
     {
-        "techs": ["loom"],
-        "points": {
-            "scout_cavalry": 40,
-            "militia": 20
-        }
-    },
-    {
-        "techs": ["feudal_age"],
-        "points": {
-            "scout_cavalry": 12,
-            "spearman": 8
-        }
-    },
-    {
-        "techs": ["fletching"],
-        "points": {
-            "scout_cavalry": 4,
-            "archer": 5,
-            "skirmisher": 4,
-            "spearman": 3
-        }
-    },
-    {
-        "techs": ["castle_age", "bodkin_arrow"],
-        "points": {
-            "mangonel": 25,
-            "crossbowman": 2
-        }
-    },
-    {
         "techs": [
-            "bloodlines", "husbandry", "elite_skirmisher",
-            "scale_barding_armor", "chain_barding_armor"
-        ],
-        "points": {
-            "knight": 8,
-            "monk": 10,
-            "elite_skirmisher": 4,
-            "cavalry_archer": 5
-        }
-    },
-    {
-        "techs": [
+            "loom", "feudal_age", "castle_age", "imperial_age",
+            "fletching", "bodkin_arrow", "bracer",
             "padded_archer_armor", "leather_archer_armor", "ring_archer_armor",
-            "ballistics", "thumb_ring",
-            "imperial_age",
-            "bracer", "chemistry", "arbalester",
-            "onager", "siege_onager", "siege_engineers", "drill"
+            "bloodlines", "husbandry",
+            "forging", "iron_casting", "blast_furnace",
+            "scale_barding_armor", "chain_barding_armor", "plate_barding_armor",
+            "thumb_ring", "ballistics", "elite_skirmisher",
+            "crossbowman", "arbalester", "chemistry",
+            "capped_ram", "siege_ram", "siege_engineers",
+            "pikeman", "halberdier",
+            "scale_mail_armor", "chain_mail_armor", "plate_mail_armor",
+            "sanctity", "redemption", "atonement", "block_printing",
+            "illumination", "theocracy",
+            "squires"
         ],
         "points": {
+            "arbalester": 4,
+            "siege_ram": 5
+        }
+    },
+    {
+        "techs": [],
+        "points": {
+            "halberdier": 2,
+            "hand_cannoneer": 3,
+            "siege_ram": 5
+        }
+    },
+    {
+        "techs": [],
+        "points": {
+            "monk": 10,
+            "bombard_cannon": 10
+        }
+    },
+    {
+        "techs": ["elite_huskarl"],
+        "points": {
+            "elite_huskarl": 2,
+            "champion": 2,
+            "hand_cannoneer": 2
+        }
+    },
+    {
+        "techs": ["eagle_warrior", "elite_eagle_warrior", "heavy_scorpion"],
+        "points": {
+            "elite_eagle_warrior": 3,
+            "slinger": 3,
+            "heavy_scorpion": 5
+        }
+    },
+    {
+        "techs": [],
+        "points": {
+            "paladin": 3,
+            "heavy_camel_rider": 3
+        }
+    },
+    {
+        "techs": [],
+        "points": {
+            "siege_onager": 9,
+            "bombard_cannon": 9,
+            "siege_ram": 6
+        }
+    },
+    {
+        "techs": [],
+        "points": {
+            "elite_plumed_archer": 1,
+            "siege_ram": 5
+        }
+    },
+    {
+        "techs": ["light_cavalry", "hussar", "elite_mangudai",
+                  "elite_steppe_lancer"],
+        "points": {
+            "hussar": 1,
+            "elite_mangudai": 3,
+            "elite_steppe_lancer": 2
+        }
+    },
+    {
+        "techs": ["heavy_cav_archer"],
+        "points": {
+            "paladin": 2,
+            "heavy_cavalry_archer": 2
+        }
+    },
+    {
+        "techs": [],
+        "points": {
+            "paladin": 1,
+            "champion": 1,
+            "hand_cannoneer": 1,
             "arbalester": 1,
-            "siege_onager": 5
+            "siege_onager": 1
         }
     }
 ]

@@ -1,63 +1,89 @@
 [
     {
-        "techs": ["mahouts"],
+        "techs": [],
         "points": {
-            "elite_war_elephant": 0
+            "knight": 0,
+            "monk": 0
         }
     },
     {
-        "techs": ["loom"],
+        "techs": ["loom", "feudal_age", "castle_age", "fletching"],
         "points": {
-            "scout_cavalry": 40,
-            "militia": 20
+            "knight": 12,
+            "archer": 7,
+            "spearman": 4
         }
     },
     {
-        "techs": ["feudal_age"],
+        "techs": ["crossbowman", "light_cavalry", "bodkin_arrow", "pikeman"],
         "points": {
-            "scout_cavalry": 12,
-            "spearman": 8
+            "crossbowman": 8,
+            "light_cavalry": 4,
+            "pikeman": 4,
+            "mangonel": 15
         }
     },
     {
-        "techs": ["fletching"],
+        "techs": ["elite_skirmisher"],
         "points": {
-            "scout_cavalry": 4,
-            "archer": 5,
-            "skirmisher": 4,
-            "spearman": 3
+            "scorpion": 15,
+            "crossbowman": 7,
+            "elite_skirmisher": 6
         }
     },
     {
-        "techs": ["castle_age", "bodkin_arrow"],
+        "techs": ["bloodlines", "husbandry", "scale_barding_armor",
+                  "chain_barding_armor"],
         "points": {
-            "mangonel": 25,
-            "crossbowman": 2
+            "cavalry_archer": 4,
+            "knight": 5,
+            "pikeman": 3,
+            "elite_skirmisher": 4
         }
     },
     {
-        "techs": [
-            "bloodlines", "husbandry", "elite_skirmisher",
-            "scale_barding_armor", "chain_barding_armor"
-        ],
+        "techs": ["padded_archer_armor", "leather_archer_armor"],
         "points": {
-            "knight": 8,
-            "monk": 10,
-            "elite_skirmisher": 4,
-            "cavalry_archer": 5
+            "conquistador": 7,
+            "knight": 5,
+            "monk": 10
         }
     },
     {
-        "techs": [
-            "padded_archer_armor", "leather_archer_armor", "ring_archer_armor",
-            "ballistics", "thumb_ring",
-            "imperial_age",
-            "bracer", "chemistry", "arbalester",
-            "onager", "siege_onager", "siege_engineers", "drill"
-        ],
+        "techs": [],
         "points": {
-            "arbalester": 1,
-            "siege_onager": 5
+            "janissary": 4,
+            "monk": 5,
+            "mangonel": 5,
+            "knight": 5,
+            "crossbowman": 5
+        }
+    },
+    {
+        "techs": ["thumb_ring"],
+        "points": {
+            "mangonel": 10,
+            "plumed_archer": 3
+        }
+    },
+    {
+        "techs": [],
+        "points": {
+            "knight": 3,
+            "crossbowman": 3,
+            "camel_rider": 3,
+            "elite_skirmisher": 3
+        }
+    },
+    {
+        "techs": ["ballistics", "sanctity", "atonement", "redemption"],
+        "points": {
+            "knight": 1,
+            "crossbowman": 1,
+            "battering_ram": 2,
+            "mangonel": 2,
+            "monk": 2,
+            "scorpion": 2
         }
     }
 ]
