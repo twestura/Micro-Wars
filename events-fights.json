@@ -1,0 +1,63 @@
+[
+    {
+        "techs": ["mahouts"],
+        "points": {
+            "elite_war_elephant": 0
+        }
+    },
+    {
+        "techs": ["loom"],
+        "points": {
+            "scout_cavalry": 40,
+            "militia": 20
+        }
+    },
+    {
+        "techs": ["feudal_age"],
+        "points": {
+            "scout_cavalry": 12,
+            "spearman": 8
+        }
+    },
+    {
+        "techs": ["fletching"],
+        "points": {
+            "scout_cavalry": 4,
+            "archer": 5,
+            "skirmisher": 4,
+            "spearman": 3
+        }
+    },
+    {
+        "techs": ["castle_age", "bodkin_arrow"],
+        "points": {
+            "mangonel": 25,
+            "crossbowman": 2
+        }
+    },
+    {
+        "techs": [
+            "bloodlines", "husbandry", "elite_skirmisher",
+            "scale_barding_armor", "chain_barding_armor"
+        ],
+        "points": {
+            "knight": 8,
+            "monk": 10,
+            "elite_skirmisher": 4,
+            "cavalry_archer": 5
+        }
+    },
+    {
+        "techs": [
+            "padded_archer_armor", "leather_archer_armor", "ring_archer_armor",
+            "ballistics", "thumb_ring",
+            "imperial_age",
+            "bracer", "chemistry", "arbalester",
+            "onager", "siege_onager", "siege_engineers", "drill"
+        ],
+        "points": {
+            "arbalester": 1,
+            "siege_onager": 5
+        }
+    }
+]

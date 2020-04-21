@@ -4,37 +4,6 @@ Creates files for the Micro Wars scenario.
 GNU General Public License v3.0: See the LICENSE file.
 """
 
-# # TODO no, I need to or these conditions together as separate triggers.
-# # I'll have one of them set a variable for which player has the most
-# # relics, then disable the other triggers
-# num_relics = len(RELIC_UIDS_TEMP)
-# for i in range(num_relics + 1):
-#     j = num_relics - i
-#     # i is the number of relics for p1, j is the number of relics for p2
-#     for trigger in (obj_ctr_p1, obj_ctr_p2):
-#         if i:
-#             p1 = trigger.add_condition(conditions.accumulate_attribute)
-#             p1.amount_or_quantity = i
-#             p1.resource_type_or_tribute_list = (
-#                 util_triggers.ACC_ATTR_RELICS)
-#             p1.player = 1
-#         if j:
-#             p2 = trigger.add_condition(conditions.accumulate_attribute)
-#             p2.amount_or_quantity = j
-#             p2.resource_type_or_tribute_list = (
-#                 util_triggers.ACC_ATTR_RELICS)
-#             p2.player = 2
-
-# Two binary-valued variables:
-# p1-more-relics
-# p2-more-relics
-# These variables are the conditions for the objective display for ctr.
-# There are then 10 triggers for which player has the most relics
-# Each disables the other triggers when fired, increments the variable,
-# awards points to the players, and activates either p1-wins or p2-wins.
-
-# Will need two more sets of "or" triggers for activating each round:
-# 3 total relics captured and 6 total relics captured.
 
 # Notes on coordinates:
 # Unit coordinates are stored as float (x, y).
@@ -68,10 +37,10 @@ from bidict import bidict
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
 from AoE2ScenarioParser.objects.trigger_obj import TriggerObject
 from AoE2ScenarioParser.pieces.structs.unit import UnitStruct
-from AoE2ScenarioParser.pieces.structs.variable_change import (
-    VariableChangeStruct
+from AoE2ScenarioParser.pieces.structs.changed_variable import (
+    ChangedVariableStruct
 )
-from AoE2ScenarioParser.datasets import conditions, effects
+from AoE2ScenarioParser.datasets import conditions, effects, techs
 import event
 from event import Fight, Minigame
 import util
@@ -577,7 +546,7 @@ class ScnData:
         if name in self._trigger_ids:
             raise ValueError(f'{name} is already the name of a trigger.')
         self._trigger_ids[name] = len(self._trigger_ids)
-        return self._scn.object_manager.get_trigger_object().add_trigger(name)
+        return self._scn.object_manager.trigger_manager.add_trigger(name)
 
     def _add_trigger_header(self, name: str) -> None:
         """
@@ -621,7 +590,7 @@ class ScnData:
         This method should be called at the end of setup_scenario after all
         triggers are created.
         """
-        trigger_mgr = self._scn.object_manager.get_trigger_object()
+        trigger_mgr = self._scn.object_manager.trigger_manager
         effect_mapping_and_function = [
             (self._activate_triggers, util_triggers.add_effect_activate),
             (self._deactivate_triggers, util_triggers.add_effect_deactivate)
@@ -674,7 +643,7 @@ class ScnData:
         assert util_techs.is_tech(tech_name), f'{tech_name} is not a tech.'
         if tech_name not in self._researched_techs:
             self._researched_techs.add(tech_name)
-            tech_id = util_techs.TECH_IDS[tech_name]
+            tech_id = techs.tech_names.inverse[tech_name]
             for player in (1, 2, 3):
                 util_triggers.add_effect_research_tech(trigger, tech_id, player)
 
@@ -709,11 +678,12 @@ class ScnData:
 
     def _name_variables(self) -> None:
         """Sets the names for trigger variables in the scenario."""
-        trigger_piece = self._scn.parsed_data['TriggerPiece']
+        # TODO don't access _parsed_data
+        trigger_piece = self._scn._parsed_data['TriggerPiece']
         var_count = trigger_piece.retrievers[6]
         var_change = trigger_piece.retrievers[7].data
         for name, __ in INITIAL_VARIABLES:
-            var = VariableChangeStruct()
+            var = ChangedVariableStruct()
             index = var_count.data
             self._var_ids[name] = index
             var.retrievers[0].data = index

@@ -8,27 +8,21 @@ GNU General Public License v3.0: See the LICENSE file.
 import copy
 import math
 from typing import List, Tuple
-from bidict import bidict
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
 from AoE2ScenarioParser.pieces.structs.unit import UnitStruct
 from AoE2ScenarioParser.datasets import units
+from AoE2ScenarioParser.datasets.players import Player
 import util
 import util_scn
 
 
 # TODO incorporate library updates for managing units.
-
-
-# Bidirectional map between unit names and ids.
-UNIT_IDS = bidict()
-for _u in units.__dict__:
-    if '__' not in _u and 'get_unit_id_by_string' not in _u:
-        UNIT_IDS[_u] = units.get_unit_id_by_string(_u)
+# TODO don't access _parsed_data directly
 
 
 def is_unit(unit_name: str) -> bool:
     """Returns True if unit_name is a valid unit name, False otherwise."""
-    return unit_name in UNIT_IDS
+    return unit_name in units.unit_names.inverse
 
 
 def copy_unit(scn: AoE2Scenario, unit: UnitStruct, player: int) -> UnitStruct:
@@ -37,30 +31,27 @@ def copy_unit(scn: AoE2Scenario, unit: UnitStruct, player: int) -> UnitStruct:
 
     Returns the unit that is added.
     """
-    copied_unit = copy.deepcopy(unit)
+    # TODO figure this out
     unit_id = util_scn.get_and_inc_unit_id(scn)
-    set_id(copied_unit, unit_id)
-    unit_array = scn.parsed_data['UnitsPiece'].retrievers[4].data[player]
-    unit_array.retrievers[0].data += 1
-    unit_array.retrievers[1].data.append(copied_unit)
-    return copied_unit
+    u = scn.object_manager.unit_manager.add_unit(
+        player=Player(player),
+        x=unit.x,
+        y=unit.y,
+        z=unit.z,
+        unit_id=unit.unit_id,
+        rotation=unit.rotation
+    )
+    set_id(u, unit_id)
+    return u
 
 
-def get_units_array(scenario: AoE2Scenario, player: int) -> List[UnitStruct]:
+def get_units_array(scn: AoE2Scenario, player: int) -> List[UnitStruct]:
     """
     Returns the array of units in scenario for the given player.
 
     Raises a ValueError if player is not in 0, ..., 8.
     """
-    if player < 0 or player > 8:
-        msg = f'Player number {player} is not between 0 and 8 (inclusive).'
-        raise ValueError(msg)
-    player_units = scenario.parsed_data['UnitsPiece'].retrievers[4].data[player]
-    unit_array = player_units.retrievers[1].data
-    # Ensures the returned object is a list, even if there is only one unit.
-    if not isinstance(player_units.retrievers[1].data, list):
-        unit_array = [unit_array]
-    return unit_array
+    return scn.object_manager.unit_manager.get_player_units(Player(player))
 
 
 def units_in_area(unit_array: List[UnitStruct],
@@ -102,22 +93,22 @@ def change_player(scenario: AoE2Scenario,
 
 def get_x(unit: UnitStruct) -> float:
     """Returns the unit's x coordinate."""
-    return unit.retrievers[0].data
+    return unit.x
 
 
 def get_y(unit: UnitStruct) -> float:
     """Returns the unit's y coordinate."""
-    return unit.retrievers[1].data
+    return unit.y
 
 
 def set_x(unit: UnitStruct, x: float):
     """Sets the unit's x coordinate to x."""
-    unit.retrievers[0].data = x
+    unit.x = x
 
 
 def set_y(unit: UnitStruct, y: float):
     """Sets the unit's y coordinate to y."""
-    unit.retrievers[1].data = y
+    unit.y = y
 
 
 def get_tile(unit: UnitStruct) -> Tuple[int, int]:
@@ -130,7 +121,7 @@ def get_tile(unit: UnitStruct) -> Tuple[int, int]:
 
 def get_id(unit: UnitStruct) -> int:
     """Returns the unit's id number."""
-    return unit.retrievers[3].data
+    return unit.reference_id
 
 
 def set_id(unit: UnitStruct, unit_id: int) -> None:
@@ -141,12 +132,12 @@ def set_id(unit: UnitStruct, unit_id: int) -> None:
     """
     if unit_id < 0:
         raise ValueError(f'unit id {unit_id} may not be negative.')
-    unit.retrievers[3].data = unit_id
+    unit.reference_id = unit_id
 
 
 def get_facing(unit: UnitStruct) -> float:
     """Returns the angle (in radians) giving the unit's facing direction."""
-    return unit.retrievers[6].data
+    return unit.rotation
 
 
 def set_facing(unit: UnitStruct, theta: float) -> None:
@@ -158,7 +149,7 @@ def set_facing(unit: UnitStruct, theta: float) -> None:
     """
     if theta < 0.0 or theta >= math.tau:
         raise ValueError(f'theta {theta} is not in [0, tau).')
-    unit.retrievers[6].data = theta
+    unit.rotation = theta
 
 
 def flip_facing_h(unit: UnitStruct) -> None:
@@ -172,12 +163,12 @@ def flip_facing_h(unit: UnitStruct) -> None:
 
 def get_unit_constant(unit: UnitStruct) -> int:
     """Returns the int unit constant (the unit id in AGE)."""
-    return unit.retrievers[4].data
+    return unit.unit_id
 
 
 def get_name(unit: UnitStruct) -> str:
     """Returns the string name of the unit (e.g. Militia, Archer)."""
-    return UNIT_IDS.inverse[get_unit_constant(unit)]
+    return units.unit_names[get_unit_constant(unit)]
 
 
 def avg_pos(unit_list: List[UnitStruct]) -> Tuple[float, float]:
