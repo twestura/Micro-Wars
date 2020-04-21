@@ -1,0 +1,51 @@
+[
+    {
+        "techs": ["forging", "scale_barding_armor"],
+        "points": {
+            "scout_cavalry": 0
+        }
+    },
+    {
+        "techs": ["loom", "feudal_age", "man_at_arms"],
+        "points": {
+            "scout_cavalry": 40,
+            "man_at_arms": 20
+        }
+    },
+    {
+        "techs": [],
+        "points": {
+            "eagle_scout": 25,
+            "man_at_arms": 15
+        }
+    },
+    {
+        "techs": [],
+        "points": {
+            "scout_cavalry": 12,
+            "spearman": 8
+        }
+    },
+    {
+        "techs": ["fletching"],
+        "points": {
+            "archer": 6,
+            "scout_cavalry": 4,
+            "spearman": 4,
+            "skirmisher": 5
+        }
+    },
+    {
+        "techs": ["bloodlines"],
+        "points": {
+            "archer": 2,
+            "scout_cavalry": 1
+        }
+    },
+    {
+        "techs": ["padded_archer_armor"],
+        "points": {
+            "archer": 3
+        }
+    }
+]
