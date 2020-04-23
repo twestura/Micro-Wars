@@ -41,6 +41,7 @@ from AoE2ScenarioParser.pieces.structs.changed_variable import (
     ChangedVariableStruct
 )
 from AoE2ScenarioParser.datasets import conditions, effects, techs
+from AoE2ScenarioParser.datasets.players import Player
 import event
 from event import Fight, Minigame
 import util
@@ -83,6 +84,8 @@ INITIAL_VARIABLES = [
     ('p1-wins', 0),
     ('p2-wins', 0),
     ('round', 0),
+    ('p1-boar', 0),
+    ('p2-boar', 0),
     ('p1-most-relics', 0),
     ('p2-most-relics', 0),
 ]
@@ -166,6 +169,57 @@ REVEALER_FIGHT_CREATE_NAME = '[I] Create Fight Map Revealers'
 REVEALER_HIDE_NAME = '[I] Hide Map Revealers'
 
 
+# Flag A reference ids for Player 1 in Steal the Bacon.
+BOAR_FLAGS_1 = [39843, 39845, 39847, 39849, 39851]
+
+
+# Flag B reference ids for Player 2 in Steal the Bacon.
+BOAR_FLAGS_2 = [39842, 39844, 39846, 39848, 39850]
+
+
+# Maps each flag id to its x and y tile coordinates.
+BOAR_FLAG_POS = {
+    39842: (187, 106),
+    39843: (198, 103),
+    39844: (209, 104),
+    39845: (217, 112),
+    39846: (218, 123),
+    39847: (215, 134),
+    39848: (204, 137),
+    39849: (193, 136),
+    39850: (185, 128),
+    39851: (184, 117),
+}
+
+
+# Unit reference id for Player 1's starting Scout in Steal the Bacon.
+BOAR_SC_1 = 39910
+
+
+# Position of Player 1's starting Scout in Steal the Bacon.
+BOAR_SC_1_POS = (185, 104)
+
+
+# Position of Player 2's starting Scout in Steal the Bacon.
+BOAR_SC_2_POS = (217, 136)
+
+
+# Unit reference id for Player 2's starting Scout in Steal the Bacon.
+BOAR_SC_2 = 39911
+
+
+# Number of Points scored for capturing a Boar in Steal the Bacon.
+BOAR_POINTS = 20
+
+
+# Unit constant for a Wild Boar.
+UCONST_BOAR = 48
+
+
+# Unit constant for a Scout Cavalry.
+UCONST_SC = 448
+
+
 # Unit constant for an Archer.
 UCONST_ARCHER = 4
 
@@ -225,6 +279,7 @@ CS_P2_CASTLE_ID = 830
 
 # Center positions of minigames to be used when changing the view.
 MINIGAME_CENTERS = {
+    'Steal the Bacon': (200, 120),
     'Galley Micro': (119, 200),
     'Xbow Timer': (40, 200),
     'Capture the Relic': (40, 120),
@@ -655,7 +710,9 @@ class ScnData:
         e = self._events[index]
         if isinstance(e, Minigame):
             name = e.name
-            if name == 'Galley Micro':
+            if name == 'Steal the Bacon':
+                event_techs = ['loom']
+            elif name == 'Galley Micro':
                 event_techs = ['fletching']
             elif name == 'Xbow Timer':
                 event_techs = ['feudal_age', 'fletching']
@@ -984,7 +1041,9 @@ class ScnData:
         Checks _round_objective[index] contains an empty list.
         """
         assert self._round_objectives[index] == []
-        if mg.name == 'Galley Micro':
+        if mg.name == 'Steal the Bacon':
+            self._add_steal_the_bacon_objectives(index)
+        elif mg.name == 'Galley Micro':
             self._add_galley_micro_objectives(index)
         elif mg.name == 'Xbow Timer':
             self._add_xbow_timer_objectives(index)
@@ -996,6 +1055,50 @@ class ScnData:
             self._add_castle_siege_objectives(index)
         else:
             raise AssertionError(f'Minigame {mg.name} not implemented.')
+
+    def _add_steal_the_bacon_objectives(self, index: int) -> None:
+        """Adds the objectives for the Steal the Bacon minigame."""
+        obj_boar_name = f'[O] Round {index} Steal the Bacon'
+        self._round_objectives[index].append(obj_boar_name)
+        obj_boar = self._add_trigger(obj_boar_name)
+        obj_boar.enabled = False
+        obj_boar.description = 'Lure a Boar to one of your Flags to capture it. Each Boar is worth 20 Points. Upon capturing a Boar you receive an additional Scout. If all of your Scouts die, you receive one additional Scout after 10 seconds.' # pylint: disable=line-too-long
+        obj_boar.short_description = '20 Points per Boar'
+        obj_boar.display_as_objective = True
+        obj_boar.display_on_screen = True
+        obj_boar.description_order = 50
+        obj_boar.mute_objectives = True
+        util_triggers.add_cond_gaia_defeated(obj_boar)
+
+        obj_boar_1_name = f'[O] Steal the Bacon Player 1 Boar'
+        self._round_objectives[index].append(obj_boar_1_name)
+        obj_boar_1 = self._add_trigger(obj_boar_1_name)
+        obj_boar_1.enabled = False
+        obj_boar_1.description = '- Player 1: <p1-boar> / 5 Boar'
+        obj_boar_1.short_description = '- P1: <p1-boar> / 5 Boar'
+        obj_boar_1.display_as_objective = True
+        obj_boar_1.display_on_screen = True
+        obj_boar_1.description_order = 49
+        obj_boar_1.mute_objectives = True
+        boar1_var = obj_boar_1.add_condition(conditions.variable_value)
+        boar1_var.amount_or_quantity = 5
+        boar1_var.variable = self._var_ids['p1-boar']
+        boar1_var.comparison = VarValComp.equal.value
+
+        obj_boar_2_name = f'[O] Steal the Bacon Player 2 Boar'
+        self._round_objectives[index].append(obj_boar_2_name)
+        obj_boar_2 = self._add_trigger(obj_boar_2_name)
+        obj_boar_2.enabled = False
+        obj_boar_2.description = '- Player 2: <p2-boar> / 5 Boar'
+        obj_boar_2.short_description = '- P2: <p2-boar> / 5 Boar'
+        obj_boar_2.display_as_objective = True
+        obj_boar_2.display_on_screen = True
+        obj_boar_2.description_order = 48
+        obj_boar_2.mute_objectives = True
+        boar2_var = obj_boar_2.add_condition(conditions.variable_value)
+        boar2_var.amount_or_quantity = 5
+        boar2_var.variable = self._var_ids['p2-boar']
+        boar2_var.comparison = VarValComp.equal.value
 
     def _add_galley_micro_objectives(self, index: int) -> None:
         """Adds the objectives for the Galley Micro minigame."""
@@ -1304,7 +1407,9 @@ class ScnData:
 
     def _add_minigame(self, index: int, mg: Minigame) -> None:
         """Adds the minigame mg with the given index."""
-        if mg.name == 'Galley Micro':
+        if mg.name == 'Steal the Bacon':
+            self._add_steal_the_bacon(index)
+        elif mg.name == 'Galley Micro':
             self._add_galley_micro(index)
         elif mg.name == 'Xbow Timer':
             self._add_xbow_timer(index)
@@ -1316,6 +1421,154 @@ class ScnData:
             self._add_castle_siege(index)
         else:
             raise AssertionError(f'Minigame {mg.name} is not implemented.')
+
+    def _add_steal_the_bacon(self, index: int) -> None:
+        """
+        Adds the Steal the Bacon minigame at the given index.
+
+        Checks the index is not 0 (cannot use a minigame as the tiebreaker).
+        """
+        assert index
+        rts = _RoundTriggers(self, index)
+        prefix = f'[R{index}]'
+
+        self._add_activate(rts.names.begin, rts.names.p1_wins)
+        self._add_activate(rts.names.begin, rts.names.p2_wins)
+        # TODO end minigame if all Boar die
+
+        util_triggers.add_effect_change_own_unit(rts.begin, 3, 1, BOAR_SC_1)
+        util_triggers.add_effect_change_own_unit(rts.begin, 3, 2, BOAR_SC_2)
+        for flag in BOAR_FLAGS_1:
+            util_triggers.add_effect_change_own_unit(rts.begin, 3, 1, flag)
+        for flag in BOAR_FLAGS_2:
+            util_triggers.add_effect_change_own_unit(rts.begin, 3, 2, flag)
+        # TODO implement
+
+        # TODO Scout Respawn Timer
+        p1_scout_respawn_name = f'{prefix} P1 Scout Respawn'
+        p1_scout_respawn = self._add_trigger(p1_scout_respawn_name)
+        p1_scout_respawn.enabled = False
+        self._add_activate(rts.names.begin, p1_scout_respawn_name)
+        p1_scout_respawn.looping = True
+        util_triggers.add_cond_pop0(p1_scout_respawn, 1)
+        p1_scout_create = p1_scout_respawn.add_effect(effects.create_object)
+        p1_scout_create.object_list_unit_id = UCONST_SC
+        p1_scout_create.player_source = 1
+        p1_scout_create.location_x, p1_scout_create.location_y = BOAR_SC_1_POS
+
+        p2_scout_respawn_name = f'{prefix} P2 Scout Respawn'
+        p2_scout_respawn = self._add_trigger(p2_scout_respawn_name)
+        p2_scout_respawn.enabled = False
+        self._add_activate(rts.names.begin, p2_scout_respawn_name)
+        p2_scout_respawn.looping = True
+        util_triggers.add_cond_pop0(p2_scout_respawn, 2)
+        p2_scout_create = p2_scout_respawn.add_effect(effects.create_object)
+        p2_scout_create.object_list_unit_id = UCONST_SC
+        p2_scout_create.player_source = 2
+        p2_scout_create.location_x, p2_scout_create.location_y = BOAR_SC_2_POS
+
+        # TODO Boar Capture
+        capture_names_1 = [f'{prefix} P1 Capture at Flag {uid}'
+                           for uid in BOAR_FLAGS_1]
+        capture_names_2 = [f'{prefix} P2 Capture at Flag {uid}'
+                           for uid in BOAR_FLAGS_2]
+
+        for capture_trigger_name in capture_names_1 + capture_names_2:
+            self._add_activate(rts.names.begin, capture_trigger_name)
+
+        for name, uid in zip(capture_names_1, BOAR_FLAGS_1):
+            capture1 = self._add_trigger(name)
+            capture1.enabled = False
+            flag_x, flag_y = BOAR_FLAG_POS[uid]
+            boar_in_area1 = capture1.add_condition(conditions.object_in_area)
+            boar_in_area1.amount_or_quantity = 1
+            boar_in_area1.player = 0
+            boar_in_area1.object_list = UCONST_BOAR
+            util_triggers.set_cond_area(boar_in_area1,
+                                        flag_x, flag_y, flag_x, flag_y)
+
+            boar_remove1 = capture1.add_effect(effects.remove_object)
+            boar_remove1.number_of_units_selected = 1
+            boar_remove1.object_list_unit_id = UCONST_BOAR
+            boar_remove1.player_source = 0
+            boar_remove1.selected_object_id = -1 # TODO
+            util_triggers.set_effect_area(boar_remove1, flag_x - 1, flag_y - 1,
+                                          flag_x + 1, flag_y + 1)
+
+            replace1 = capture1.add_effect(effects.replace_object)
+            replace1.number_of_units_selected = 1
+            replace1.player_source = 1
+            replace1.player_target = 1
+            replace1.selected_object_id = uid
+            replace1.object_list_unit_id = FLAG_A_UCONST
+            replace1.object_list_unit_id_2 = UCONST_SC
+            self._add_effect_p1_score(capture1, BOAR_POINTS)
+            inc_var1 = capture1.add_effect(effects.change_variable)
+            inc_var1.quantity = 1
+            inc_var1.operation = ChangeVarOp.add.value
+            inc_var1.from_variable = self._var_ids['p1-boar']
+            inc_var1.message = 'p1-boar'
+
+        for name, uid in zip(capture_names_2, BOAR_FLAGS_2):
+            capture2 = self._add_trigger(name)
+            capture2.enabled = False
+            flag_x, flag_y = BOAR_FLAG_POS[uid]
+            boar_in_area2 = capture2.add_condition(conditions.object_in_area)
+            boar_in_area2.amount_or_quantity = 1
+            boar_in_area2.player = 0
+            boar_in_area2.object_list = UCONST_BOAR
+            util_triggers.set_cond_area(boar_in_area2,
+                                        flag_x, flag_y, flag_x, flag_y)
+
+            boar_remove2 = capture2.add_effect(effects.remove_object)
+            boar_remove2.number_of_units_selected = 1
+            boar_remove2.object_list_unit_id = UCONST_BOAR
+            boar_remove2.player_source = 0
+            boar_remove2.selected_object_id = -1 # TODO
+            util_triggers.set_effect_area(boar_remove2, flag_x - 1, flag_y - 1,
+                                          flag_x + 1, flag_y + 1)
+
+            replace2 = capture2.add_effect(effects.replace_object)
+            replace2.number_of_units_selected = 1
+            replace2.player_source = 2
+            replace2.player_target = 2
+            replace2.selected_object_id = uid
+            replace2.object_list_unit_id = FLAG_A_UCONST
+            replace2.object_list_unit_id_2 = UCONST_SC
+            self._add_effect_p2_score(capture2, BOAR_POINTS)
+            inc_var2 = capture2.add_effect(effects.change_variable)
+            inc_var2.quantity = 1
+            inc_var2.operation = ChangeVarOp.add.value
+            inc_var2.from_variable = self._var_ids['p2-boar']
+            inc_var2.message = 'p2-boar'
+
+        p1_boar = rts.p1_wins.add_condition(conditions.variable_value)
+        p1_boar.amount_or_quantity = 5
+        p1_boar.variable = self._var_ids['p1-boar']
+        p1_boar.comparison = VarValComp.equal.value
+        self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
+
+        p2_boar = rts.p2_wins.add_condition(conditions.variable_value)
+        p2_boar.amount_or_quantity = 5
+        p2_boar.variable = self._var_ids['p2-boar']
+        p2_boar.comparison = VarValComp.equal.value
+        self._add_deactivate(rts.names.p2_wins, rts.names.p1_wins)
+
+        for win_trigger_name in (rts.names.p1_wins, rts.names.p2_wins):
+            for capture_trigger_name in capture_names_1 + capture_names_2:
+                self._add_deactivate(win_trigger_name, capture_trigger_name)
+
+        # Cleanup removes units from player control.
+        change_1_to_3 = rts.cleanup.add_effect(effects.change_ownership)
+        change_1_to_3.player_source = 1
+        change_1_to_3.player_target = 3
+        util_triggers.set_effect_area(change_1_to_3, 160, 80, 239, 159)
+        change_2_to_3 = rts.cleanup.add_effect(effects.change_ownership)
+        change_2_to_3.player_source = 2
+        change_2_to_3.player_target = 3
+        util_triggers.set_effect_area(change_2_to_3, 160, 80, 239, 159)
+        self._add_deactivate(rts.names.cleanup, p1_scout_respawn_name)
+        self._add_deactivate(rts.names.cleanup, p2_scout_respawn_name)
 
     def _add_galley_micro(self, index: int) -> None:
         """
@@ -2213,7 +2466,20 @@ def scratch(args): # pylint: disable=unused-argument
     """Runs a simple test experiment."""
     pass
     # scratch_path = 'scratch.aoe2scenario'
-    # scn = AoE2Scenario(SCENARIO_TEMPLATE)
+    scn = AoE2Scenario(SCENARIO_TEMPLATE)
+    umgr = scn.object_manager.unit_manager
+    p3_units = umgr.get_player_units(Player.THREE)
+    p3_units = umgr.get_units_in_area(x1=160.0, y1=80.0, x2=240.0, y2=160.0,
+                                      unit_list=p3_units)
+    for unit in p3_units:
+        try:
+            name = unit.name
+        except KeyError:
+            name = 'unknown'
+        x = unit.x
+        y = unit.y
+        uid = unit.reference_id
+        print(f'{name} ({uid}) - ({x}, {y})')
 
 
 def main():
