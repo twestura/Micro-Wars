@@ -1452,28 +1452,41 @@ class ScnData:
         for flag in BOAR_FLAGS_2:
             util_triggers.add_effect_change_own_unit(rts.begin, 3, 2, flag)
 
-        # TODO Scout Respawn Timer
-        p1_scout_respawn_name = f'{prefix} P1 Scout Respawn'
-        p1_scout_respawn = self._add_trigger(p1_scout_respawn_name)
-        p1_scout_respawn.enabled = False
-        self._add_activate(rts.names.begin, p1_scout_respawn_name)
-        p1_scout_respawn.looping = True
-        util_triggers.add_cond_pop0(p1_scout_respawn, 1)
-        p1_scout_create = p1_scout_respawn.add_effect(effects.create_object)
-        p1_scout_create.object_list_unit_id = UCONST_SC
-        p1_scout_create.player_source = 1
-        p1_scout_create.location_x, p1_scout_create.location_y = BOAR_SC_1_POS
+        for player, pos in ((1, BOAR_SC_1_POS), (2, BOAR_SC_2_POS)):
+            scout_respawn1_name = f'{prefix} P{player} Scout Respawn 1'
+            scout_respawn1 = self._add_trigger(scout_respawn1_name)
+            scout_respawn1.enabled = False
+            self._add_activate(rts.names.begin, scout_respawn1_name)
+            scout_respawn1.looping = True
+            util_triggers.add_cond_pop0(scout_respawn1, player)
+            scout_create1 = scout_respawn1.add_effect(effects.create_object)
+            scout_create1.object_list_unit_id = UCONST_SC
+            scout_create1.player_source = player
+            scout_create1.location_x, scout_create1.location_y = pos
+            self._add_deactivate(rts.names.cleanup, scout_respawn1_name)
 
-        p2_scout_respawn_name = f'{prefix} P2 Scout Respawn'
-        p2_scout_respawn = self._add_trigger(p2_scout_respawn_name)
-        p2_scout_respawn.enabled = False
-        self._add_activate(rts.names.begin, p2_scout_respawn_name)
-        p2_scout_respawn.looping = True
-        util_triggers.add_cond_pop0(p2_scout_respawn, 2)
-        p2_scout_create = p2_scout_respawn.add_effect(effects.create_object)
-        p2_scout_create.object_list_unit_id = UCONST_SC
-        p2_scout_create.player_source = 2
-        p2_scout_create.location_x, p2_scout_create.location_y = BOAR_SC_2_POS
+        # TODO Scout Respawn Timer
+        # p1_scout_respawn_name = f'{prefix} P1 Scout Respawn 1'
+        # p1_scout_respawn = self._add_trigger(p1_scout_respawn_name)
+        # p1_scout_respawn.enabled = False
+        # self._add_activate(rts.names.begin, p1_scout_respawn_name)
+        # p1_scout_respawn.looping = True
+        # util_triggers.add_cond_pop0(p1_scout_respawn, 1)
+        # p1_scout_create = p1_scout_respawn.add_effect(effects.create_object)
+        # p1_scout_create.object_list_unit_id = UCONST_SC
+        # p1_scout_create.player_source = 1
+        # p1_scout_create.location_x, p1_scout_create.location_y = BOAR_SC_1_POS
+
+        # p2_scout_respawn_name = f'{prefix} P2 Scout Respawn 1'
+        # p2_scout_respawn = self._add_trigger(p2_scout_respawn_name)
+        # p2_scout_respawn.enabled = False
+        # self._add_activate(rts.names.begin, p2_scout_respawn_name)
+        # p2_scout_respawn.looping = True
+        # util_triggers.add_cond_pop0(p2_scout_respawn, 2)
+        # p2_scout_create = p2_scout_respawn.add_effect(effects.create_object)
+        # p2_scout_create.object_list_unit_id = UCONST_SC
+        # p2_scout_create.player_source = 2
+        # p2_scout_create.location_x, p2_scout_create.location_y = BOAR_SC_2_POS
 
         capture_names_1 = [f'{prefix} P1 Capture at Flag {uid}'
                            for uid in BOAR_FLAGS_1]
@@ -1583,8 +1596,6 @@ class ScnData:
         change_2_to_3.player_source = 2
         change_2_to_3.player_target = 3
         util_triggers.set_effect_area(change_2_to_3, 160, 80, 239, 159)
-        self._add_deactivate(rts.names.cleanup, p1_scout_respawn_name)
-        self._add_deactivate(rts.names.cleanup, p2_scout_respawn_name)
 
     def _add_galley_micro(self, index: int) -> None:
         """
