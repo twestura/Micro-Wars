@@ -1431,10 +1431,19 @@ class ScnData:
         assert index
         rts = _RoundTriggers(self, index)
         prefix = f'[R{index}]'
+        umgr = self._scn.object_manager.unit_manager
+
+        boar_units = {
+            unit
+            for unit in umgr.get_units_in_area(
+                x1=160.0, y1=80.0, x2=240.0, y2=160.0, players=[Player.GAIA])
+            if unit.unit_id == UCONST_BOAR
+        }
+        boar_dead_name = f'{prefix} All Boar are Dead'
 
         self._add_activate(rts.names.begin, rts.names.p1_wins)
         self._add_activate(rts.names.begin, rts.names.p2_wins)
-        # TODO end minigame if all Boar die
+        self._add_activate(rts.names.begin, boar_dead_name)
 
         util_triggers.add_effect_change_own_unit(rts.begin, 3, 1, BOAR_SC_1)
         util_triggers.add_effect_change_own_unit(rts.begin, 3, 2, BOAR_SC_2)
@@ -1442,7 +1451,6 @@ class ScnData:
             util_triggers.add_effect_change_own_unit(rts.begin, 3, 1, flag)
         for flag in BOAR_FLAGS_2:
             util_triggers.add_effect_change_own_unit(rts.begin, 3, 2, flag)
-        # TODO implement
 
         # TODO Scout Respawn Timer
         p1_scout_respawn_name = f'{prefix} P1 Scout Respawn'
@@ -1467,7 +1475,6 @@ class ScnData:
         p2_scout_create.player_source = 2
         p2_scout_create.location_x, p2_scout_create.location_y = BOAR_SC_2_POS
 
-        # TODO Boar Capture
         capture_names_1 = [f'{prefix} P1 Capture at Flag {uid}'
                            for uid in BOAR_FLAGS_1]
         capture_names_2 = [f'{prefix} P2 Capture at Flag {uid}'
@@ -1491,7 +1498,6 @@ class ScnData:
             boar_remove1.number_of_units_selected = 1
             boar_remove1.object_list_unit_id = UCONST_BOAR
             boar_remove1.player_source = 0
-            boar_remove1.selected_object_id = -1 # TODO
             util_triggers.set_effect_area(boar_remove1, flag_x - 1, flag_y - 1,
                                           flag_x + 1, flag_y + 1)
 
@@ -1524,7 +1530,6 @@ class ScnData:
             boar_remove2.number_of_units_selected = 1
             boar_remove2.object_list_unit_id = UCONST_BOAR
             boar_remove2.player_source = 0
-            boar_remove2.selected_object_id = -1 # TODO
             util_triggers.set_effect_area(boar_remove2, flag_x - 1, flag_y - 1,
                                           flag_x + 1, flag_y + 1)
 
@@ -1547,12 +1552,23 @@ class ScnData:
         p1_boar.variable = self._var_ids['p1-boar']
         p1_boar.comparison = VarValComp.equal.value
         self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
+        self._add_deactivate(rts.names.p1_wins, boar_dead_name)
 
         p2_boar = rts.p2_wins.add_condition(conditions.variable_value)
         p2_boar.amount_or_quantity = 5
         p2_boar.variable = self._var_ids['p2-boar']
         p2_boar.comparison = VarValComp.equal.value
         self._add_deactivate(rts.names.p2_wins, rts.names.p1_wins)
+        self._add_deactivate(rts.names.p2_wins, boar_dead_name)
+
+        boar_dead = self._add_trigger(boar_dead_name)
+        boar_dead.enabled = False
+        for boar in boar_units:
+            destroy = boar_dead.add_condition(conditions.destroy_object)
+            destroy.unit_object = boar.reference_id
+        self._add_deactivate(boar_dead_name, rts.names.p1_wins)
+        self._add_deactivate(boar_dead_name, rts.names.p2_wins)
+        self._add_activate(boar_dead_name, rts.names.cleanup)
 
         for win_trigger_name in (rts.names.p1_wins, rts.names.p2_wins):
             for capture_trigger_name in capture_names_1 + capture_names_2:
@@ -2464,22 +2480,35 @@ def build_publish_files(args):
 
 def scratch(args): # pylint: disable=unused-argument
     """Runs a simple test experiment."""
-    pass
     # scratch_path = 'scratch.aoe2scenario'
-    scn = AoE2Scenario(SCENARIO_TEMPLATE)
-    umgr = scn.object_manager.unit_manager
-    p3_units = umgr.get_player_units(Player.THREE)
-    p3_units = umgr.get_units_in_area(x1=160.0, y1=80.0, x2=240.0, y2=160.0,
-                                      unit_list=p3_units)
-    for unit in p3_units:
-        try:
-            name = unit.name
-        except KeyError:
-            name = 'unknown'
-        x = unit.x
-        y = unit.y
-        uid = unit.reference_id
-        print(f'{name} ({uid}) - ({x}, {y})')
+    # scn = AoE2Scenario(SCENARIO_TEMPLATE)
+    # umgr = scn.object_manager.unit_manager
+    # p3_units = umgr.get_player_units(Player.THREE)
+    # p3_units = umgr.get_units_in_area(x1=160.0, y1=80.0, x2=240.0, y2=160.0,
+    #                                   unit_list=p3_units)
+    # for unit in p3_units:
+    #     try:
+    #         name = unit.name
+    #     except KeyError:
+    #         name = 'unknown'
+    #     x = unit.x
+    #     y = unit.y
+    #     uid = unit.reference_id
+    #     print(f'{name} ({uid}) - ({x}, {y})')
+    # print('Gaia:')
+    # p0_units = umgr.get_player_units(Player.GAIA)
+    # p0_units = umgr.get_units_in_area(x1=160.0, y1=80.0, x2=240.0, y2=160.0,
+    #                                   unit_list=p0_units)
+    # for unit in p0_units:
+    #     if unit.unit_id == UCONST_BOAR:
+    #         x = unit.x
+    #         y = unit.y
+    #         uid = unit.reference_id
+    #         print(f'({uid}) - ({x}, {y})')
+    scn = AoE2Scenario('Micro Wars.aoe2scenario')
+    tmgr = scn.object_manager.trigger_manager
+    print(tmgr.get_summary_as_string())
+    print(tmgr.get_trigger_as_string(trigger_id=70))
 
 
 def main():
