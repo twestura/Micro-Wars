@@ -1062,7 +1062,7 @@ class ScnData:
         self._round_objectives[index].append(obj_boar_name)
         obj_boar = self._add_trigger(obj_boar_name)
         obj_boar.enabled = False
-        obj_boar.description = 'Lure a Boar to one of your Flags to capture it. Each Boar is worth 20 Points. Upon capturing a Boar you receive an additional Scout. If all of your Scouts die, you receive one additional Scout after 10 seconds.' # pylint: disable=line-too-long
+        obj_boar.description = 'Lure a Boar to one of your Flags to capture it. Each Boar is worth 20 Points. Upon capturing a Boar you receive an additional Scout. If all of your Scouts die, you receive one additional Scout after 10 seconds. Once you have captured 2 Boar, you will always have 2 Scouts.' # pylint: disable=line-too-long
         obj_boar.short_description = '20 Points per Boar'
         obj_boar.display_as_objective = True
         obj_boar.display_on_screen = True
@@ -1454,39 +1454,26 @@ class ScnData:
 
         for player, pos in ((1, BOAR_SC_1_POS), (2, BOAR_SC_2_POS)):
             scout_respawn1_name = f'{prefix} P{player} Scout Respawn 1'
+            scout_countdown_name = f'{prefix} P{player} Scout Countdown'
             scout_respawn1 = self._add_trigger(scout_respawn1_name)
             scout_respawn1.enabled = False
             self._add_activate(rts.names.begin, scout_respawn1_name)
             scout_respawn1.looping = True
             util_triggers.add_cond_pop0(scout_respawn1, player)
-            scout_create1 = scout_respawn1.add_effect(effects.create_object)
+            self._add_deactivate(scout_respawn1_name, scout_respawn1_name)
+            self._add_activate(scout_respawn1_name, scout_countdown_name)
+            self._add_deactivate(rts.names.cleanup, scout_respawn1_name)
+
+            scout_countdown = self._add_trigger(scout_countdown_name)
+            scout_countdown.enabled = False
+            util_triggers.add_cond_timer(scout_countdown, 10)
+            scout_create1 = scout_countdown.add_effect(effects.create_object)
             scout_create1.object_list_unit_id = UCONST_SC
             scout_create1.player_source = player
             scout_create1.location_x, scout_create1.location_y = pos
-            self._add_deactivate(rts.names.cleanup, scout_respawn1_name)
-
-        # TODO Scout Respawn Timer
-        # p1_scout_respawn_name = f'{prefix} P1 Scout Respawn 1'
-        # p1_scout_respawn = self._add_trigger(p1_scout_respawn_name)
-        # p1_scout_respawn.enabled = False
-        # self._add_activate(rts.names.begin, p1_scout_respawn_name)
-        # p1_scout_respawn.looping = True
-        # util_triggers.add_cond_pop0(p1_scout_respawn, 1)
-        # p1_scout_create = p1_scout_respawn.add_effect(effects.create_object)
-        # p1_scout_create.object_list_unit_id = UCONST_SC
-        # p1_scout_create.player_source = 1
-        # p1_scout_create.location_x, p1_scout_create.location_y = BOAR_SC_1_POS
-
-        # p2_scout_respawn_name = f'{prefix} P2 Scout Respawn 1'
-        # p2_scout_respawn = self._add_trigger(p2_scout_respawn_name)
-        # p2_scout_respawn.enabled = False
-        # self._add_activate(rts.names.begin, p2_scout_respawn_name)
-        # p2_scout_respawn.looping = True
-        # util_triggers.add_cond_pop0(p2_scout_respawn, 2)
-        # p2_scout_create = p2_scout_respawn.add_effect(effects.create_object)
-        # p2_scout_create.object_list_unit_id = UCONST_SC
-        # p2_scout_create.player_source = 2
-        # p2_scout_create.location_x, p2_scout_create.location_y = BOAR_SC_2_POS
+            self._add_activate(scout_countdown_name, scout_respawn1_name)
+            self._add_deactivate(rts.names.cleanup, scout_countdown_name)
+            # TODO 2 Scouts after capturing 2 Boar.
 
         capture_names_1 = [f'{prefix} P1 Capture at Flag {uid}'
                            for uid in BOAR_FLAGS_1]
@@ -1496,69 +1483,44 @@ class ScnData:
         for capture_trigger_name in capture_names_1 + capture_names_2:
             self._add_activate(rts.names.begin, capture_trigger_name)
 
-        for name, uid in zip(capture_names_1, BOAR_FLAGS_1):
-            capture1 = self._add_trigger(name)
-            capture1.enabled = False
-            flag_x, flag_y = BOAR_FLAG_POS[uid]
-            boar_in_area1 = capture1.add_condition(conditions.object_in_area)
-            boar_in_area1.amount_or_quantity = 1
-            boar_in_area1.player = 0
-            boar_in_area1.object_list = UCONST_BOAR
-            util_triggers.set_cond_area(boar_in_area1,
-                                        flag_x, flag_y, flag_x, flag_y)
+        for player, names, flags in (
+                (1, capture_names_1, BOAR_FLAGS_1),
+                (2, capture_names_2, BOAR_FLAGS_2)):
+            for name, uid in zip(names, flags):
+                capture = self._add_trigger(name)
+                capture.enabled = False
+                flag_x, flag_y = BOAR_FLAG_POS[uid]
+                boar_in_area = capture.add_condition(conditions.object_in_area)
+                boar_in_area.amount_or_quantity = 1
+                boar_in_area.player = 0
+                boar_in_area.object_list = UCONST_BOAR
+                util_triggers.set_cond_area(boar_in_area,
+                                            flag_x, flag_y, flag_x, flag_y)
 
-            boar_remove1 = capture1.add_effect(effects.remove_object)
-            boar_remove1.number_of_units_selected = 1
-            boar_remove1.object_list_unit_id = UCONST_BOAR
-            boar_remove1.player_source = 0
-            util_triggers.set_effect_area(boar_remove1, flag_x - 1, flag_y - 1,
-                                          flag_x + 1, flag_y + 1)
+                boar_remove = capture.add_effect(effects.remove_object)
+                boar_remove.number_of_units_selected = 1
+                boar_remove.object_list_unit_id = UCONST_BOAR
+                boar_remove.player_source = 0
+                util_triggers.set_effect_area(
+                    boar_remove, flag_x - 1, flag_y - 1, flag_x + 1, flag_y + 1)
 
-            replace1 = capture1.add_effect(effects.replace_object)
-            replace1.number_of_units_selected = 1
-            replace1.player_source = 1
-            replace1.player_target = 1
-            replace1.selected_object_id = uid
-            replace1.object_list_unit_id = FLAG_A_UCONST
-            replace1.object_list_unit_id_2 = UCONST_SC
-            self._add_effect_p1_score(capture1, BOAR_POINTS)
-            inc_var1 = capture1.add_effect(effects.change_variable)
-            inc_var1.quantity = 1
-            inc_var1.operation = ChangeVarOp.add.value
-            inc_var1.from_variable = self._var_ids['p1-boar']
-            inc_var1.message = 'p1-boar'
-
-        for name, uid in zip(capture_names_2, BOAR_FLAGS_2):
-            capture2 = self._add_trigger(name)
-            capture2.enabled = False
-            flag_x, flag_y = BOAR_FLAG_POS[uid]
-            boar_in_area2 = capture2.add_condition(conditions.object_in_area)
-            boar_in_area2.amount_or_quantity = 1
-            boar_in_area2.player = 0
-            boar_in_area2.object_list = UCONST_BOAR
-            util_triggers.set_cond_area(boar_in_area2,
-                                        flag_x, flag_y, flag_x, flag_y)
-
-            boar_remove2 = capture2.add_effect(effects.remove_object)
-            boar_remove2.number_of_units_selected = 1
-            boar_remove2.object_list_unit_id = UCONST_BOAR
-            boar_remove2.player_source = 0
-            util_triggers.set_effect_area(boar_remove2, flag_x - 1, flag_y - 1,
-                                          flag_x + 1, flag_y + 1)
-
-            replace2 = capture2.add_effect(effects.replace_object)
-            replace2.number_of_units_selected = 1
-            replace2.player_source = 2
-            replace2.player_target = 2
-            replace2.selected_object_id = uid
-            replace2.object_list_unit_id = FLAG_A_UCONST
-            replace2.object_list_unit_id_2 = UCONST_SC
-            self._add_effect_p2_score(capture2, BOAR_POINTS)
-            inc_var2 = capture2.add_effect(effects.change_variable)
-            inc_var2.quantity = 1
-            inc_var2.operation = ChangeVarOp.add.value
-            inc_var2.from_variable = self._var_ids['p2-boar']
-            inc_var2.message = 'p2-boar'
+                replace = capture.add_effect(effects.replace_object)
+                replace.number_of_units_selected = 1
+                replace.player_source = player
+                replace.player_target = player
+                replace.selected_object_id = uid
+                replace.object_list_unit_id = FLAG_A_UCONST
+                replace.object_list_unit_id_2 = UCONST_SC
+                if player == 1:
+                    self._add_effect_p1_score(capture, BOAR_POINTS)
+                else:
+                    self._add_effect_p2_score(capture, BOAR_POINTS)
+                inc_var = capture.add_effect(effects.change_variable)
+                inc_var.quantity = 1
+                inc_var.operation = ChangeVarOp.add.value
+                var_name = f'p{player}-boar'
+                inc_var.from_variable = self._var_ids[var_name]
+                inc_var.message = var_name
 
         p1_boar = rts.p1_wins.add_condition(conditions.variable_value)
         p1_boar.amount_or_quantity = 5
@@ -1588,14 +1550,11 @@ class ScnData:
                 self._add_deactivate(win_trigger_name, capture_trigger_name)
 
         # Cleanup removes units from player control.
-        change_1_to_3 = rts.cleanup.add_effect(effects.change_ownership)
-        change_1_to_3.player_source = 1
-        change_1_to_3.player_target = 3
-        util_triggers.set_effect_area(change_1_to_3, 160, 80, 239, 159)
-        change_2_to_3 = rts.cleanup.add_effect(effects.change_ownership)
-        change_2_to_3.player_source = 2
-        change_2_to_3.player_target = 3
-        util_triggers.set_effect_area(change_2_to_3, 160, 80, 239, 159)
+        for player_source in (1, 2):
+            cleanup_change = rts.cleanup.add_effect(effects.change_ownership)
+            cleanup_change.player_source = player_source
+            cleanup_change.player_target = 3
+            util_triggers.set_effect_area(cleanup_change, 160, 80, 239, 159)
 
     def _add_galley_micro(self, index: int) -> None:
         """
