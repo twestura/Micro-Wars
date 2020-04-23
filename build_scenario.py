@@ -236,6 +236,10 @@ UCONST_XBOW = 24
 UCONST_MONK = 125
 
 
+# Unit constant for a Monastery.
+UCONST_MONASTERY = 104
+
+
 # Unit constant for a Relic.
 UCONST_RELIC = 285
 
@@ -246,6 +250,21 @@ RELIC_POSITIONS = {(28, 125), (35, 132), (48, 112)}
 
 # The number of relics captured at the end of a round of Capture the Relic.
 ROUND_RELICS = {1: 3, 2: 6, 3: 9}
+
+
+# Reference IDs for Player 1's Monasteries in Capture the Relic.
+MONASTERIES_P1 = [10456, 10457]
+
+
+# Reference IDs for Player 2's Monasteries in Capture the Relic.
+MONASTERIES_P2 = [10454, 10455]
+
+
+# Reference IDs for each Player's Monasteries in Capture the Relic.
+MONASTERIES = {
+    1: MONASTERIES_P1,
+    2: MONASTERIES_P2,
+}
 
 
 # Unit ID of Flag A.
@@ -1062,7 +1081,7 @@ class ScnData:
         self._round_objectives[index].append(obj_boar_name)
         obj_boar = self._add_trigger(obj_boar_name)
         obj_boar.enabled = False
-        obj_boar.description = 'Lure a Boar to one of your Flags to capture it. Each Boar is worth 20 Points. Upon capturing a Boar you receive an additional Scout. If all of your Scouts die, you receive one additional Scout after 10 seconds. Once you have captured 2 Boar, you will always have 2 Scouts.' # pylint: disable=line-too-long
+        obj_boar.description = 'Lure a Boar to one of your Flags to capture it. Each Boar is worth 20 Points. Upon capturing a Boar you receive an additional Scout. If all of your Scouts die, you receive one additional Scout after 10 seconds.' # pylint: disable=line-too-long
         obj_boar.short_description = '20 Points per Boar'
         obj_boar.display_as_objective = True
         obj_boar.display_on_screen = True
@@ -1473,20 +1492,11 @@ class ScnData:
             scout_create1.location_x, scout_create1.location_y = pos
             self._add_activate(scout_countdown_name, scout_respawn1_name)
             self._add_deactivate(rts.names.cleanup, scout_countdown_name)
-            # TODO 2 Scouts after capturing 2 Boar.
 
-        capture_names_1 = [f'{prefix} P1 Capture at Flag {uid}'
-                           for uid in BOAR_FLAGS_1]
-        capture_names_2 = [f'{prefix} P2 Capture at Flag {uid}'
-                           for uid in BOAR_FLAGS_2]
-
-        for capture_trigger_name in capture_names_1 + capture_names_2:
-            self._add_activate(rts.names.begin, capture_trigger_name)
-
-        for player, names, flags in (
-                (1, capture_names_1, BOAR_FLAGS_1),
-                (2, capture_names_2, BOAR_FLAGS_2)):
-            for name, uid in zip(names, flags):
+        for player, flags in ((1, BOAR_FLAGS_1), (2, BOAR_FLAGS_2)):
+            for uid in flags:
+                name = f'{prefix} P{player} Capture at Flag {uid}'
+                self._add_activate(rts.names.begin, name)
                 capture = self._add_trigger(name)
                 capture.enabled = False
                 flag_x, flag_y = BOAR_FLAG_POS[uid]
@@ -1498,7 +1508,6 @@ class ScnData:
                                             flag_x, flag_y, flag_x, flag_y)
 
                 boar_remove = capture.add_effect(effects.remove_object)
-                boar_remove.number_of_units_selected = 1
                 boar_remove.object_list_unit_id = UCONST_BOAR
                 boar_remove.player_source = 0
                 util_triggers.set_effect_area(
@@ -1522,6 +1531,9 @@ class ScnData:
                 inc_var.from_variable = self._var_ids[var_name]
                 inc_var.message = var_name
 
+                for win_trigger_name in (rts.names.p1_wins, rts.names.p2_wins):
+                    self._add_deactivate(win_trigger_name, name)
+
         p1_boar = rts.p1_wins.add_condition(conditions.variable_value)
         p1_boar.amount_or_quantity = 5
         p1_boar.variable = self._var_ids['p1-boar']
@@ -1544,10 +1556,6 @@ class ScnData:
         self._add_deactivate(boar_dead_name, rts.names.p1_wins)
         self._add_deactivate(boar_dead_name, rts.names.p2_wins)
         self._add_activate(boar_dead_name, rts.names.cleanup)
-
-        for win_trigger_name in (rts.names.p1_wins, rts.names.p2_wins):
-            for capture_trigger_name in capture_names_1 + capture_names_2:
-                self._add_deactivate(win_trigger_name, capture_trigger_name)
 
         # Cleanup removes units from player control.
         for player_source in (1, 2):
@@ -2085,6 +2093,26 @@ class ScnData:
                     self._add_deactivate(name, n)
             self._add_activate(name, round_cleanup_name)
 
+        monastery_loss_names = (f'{prefix} Player 1 Loses Monasteries',
+                                f'{prefix} Player 2 Loses Monasteries')
+        for k, name in enumerate(monastery_loss_names):
+            player = k + 1
+            monastery_loss = self._add_trigger(name)
+            for monastery in MONASTERIES[player]:
+                loss = monastery_loss.add_condition(conditions.destroy_object)
+                loss.unit_object = monastery
+            self._add_activate(rts.names.begin, name)
+            self._add_activate(name, rts.names.cleanup)
+            self._add_deactivate(rts.names.p1_wins, name)
+            self._add_deactivate(rts.names.p2_wins, name)
+            for cond_name in r1_cond_names + r2_cond_names + r3_cond_names:
+                self._add_deactivate(name, cond_name)
+
+            if player == 1:
+                self._add_effect_p2_score(monastery_loss, 100)
+            else:
+                self._add_effect_p1_score(monastery_loss, 100)
+
         # Cleanup removes units from player control.
         change_1_to_3 = rts.cleanup.add_effect(effects.change_ownership)
         change_1_to_3.player_source = 1
@@ -2451,34 +2479,16 @@ def build_publish_files(args):
 def scratch(args): # pylint: disable=unused-argument
     """Runs a simple test experiment."""
     # scratch_path = 'scratch.aoe2scenario'
-    # scn = AoE2Scenario(SCENARIO_TEMPLATE)
-    # umgr = scn.object_manager.unit_manager
-    # p3_units = umgr.get_player_units(Player.THREE)
-    # p3_units = umgr.get_units_in_area(x1=160.0, y1=80.0, x2=240.0, y2=160.0,
-    #                                   unit_list=p3_units)
-    # for unit in p3_units:
-    #     try:
-    #         name = unit.name
-    #     except KeyError:
-    #         name = 'unknown'
-    #     x = unit.x
-    #     y = unit.y
-    #     uid = unit.reference_id
-    #     print(f'{name} ({uid}) - ({x}, {y})')
-    # print('Gaia:')
-    # p0_units = umgr.get_player_units(Player.GAIA)
-    # p0_units = umgr.get_units_in_area(x1=160.0, y1=80.0, x2=240.0, y2=160.0,
-    #                                   unit_list=p0_units)
-    # for unit in p0_units:
-    #     if unit.unit_id == UCONST_BOAR:
-    #         x = unit.x
-    #         y = unit.y
-    #         uid = unit.reference_id
-    #         print(f'({uid}) - ({x}, {y})')
-    scn = AoE2Scenario('Micro Wars.aoe2scenario')
-    tmgr = scn.object_manager.trigger_manager
-    print(tmgr.get_summary_as_string())
-    print(tmgr.get_trigger_as_string(trigger_id=70))
+    scn = AoE2Scenario(SCENARIO_TEMPLATE)
+    umgr = scn.object_manager.unit_manager
+    unit_array = umgr.get_all_units()
+    for u in unit_array:
+        if u.unit_id == UCONST_MONASTERY:
+            name = u.name
+            uid = u.reference_id
+            x = u.x
+            y = u.y
+            print(f'{name} ({uid}) - ({x}, {y})')
 
 
 def main():
