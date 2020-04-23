@@ -46,14 +46,13 @@
         "points": {
             "conquistador": 7,
             "knight": 5,
-            "monk": 10
+            "elite_skirmisher": 2
         }
     },
     {
         "techs": [],
         "points": {
             "janissary": 4,
-            "monk": 5,
             "mangonel": 5,
             "knight": 5,
             "crossbowman": 5

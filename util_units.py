@@ -5,7 +5,6 @@ GNU General Public License v3.0: See the LICENSE file.
 """
 
 
-import copy
 import math
 from typing import List, Tuple
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
@@ -31,7 +30,6 @@ def copy_unit(scn: AoE2Scenario, unit: UnitStruct, player: int) -> UnitStruct:
 
     Returns the unit that is added.
     """
-    # TODO figure this out
     unit_id = util_scn.get_and_inc_unit_id(scn)
     u = scn.object_manager.unit_manager.add_unit(
         player=Player(player),

@@ -656,30 +656,31 @@ class ScnData:
         if isinstance(e, Minigame):
             name = e.name
             if name == 'Galley Micro':
-                techs = ['fletching']
+                event_techs = ['fletching']
             elif name == 'Xbow Timer':
-                techs = ['feudal_age', 'fletching']
+                event_techs = ['feudal_age', 'fletching']
             elif name == 'Capture the Relic':
-                techs = ['castle_age', 'crossbowman', 'fletching',
-                         'bodkin_arrow']
+                event_techs = ['castle_age', 'crossbowman', 'fletching',
+                               'bodkin_arrow']
             elif name == 'DauT Castle':
-                techs = ['loom', 'castle_age', 'crossbowman',
-                         'elite_skirmisher', 'fletching', 'bodkin_arrow',
-                         'sanctity', 'atonement', 'redemption']
+                event_techs = ['loom', 'castle_age', 'crossbowman',
+                               'elite_skirmisher', 'fletching', 'bodkin_arrow',
+                               'sanctity', 'atonement', 'redemption']
             elif name == 'Castle Siege':
-                techs = ['loom', 'imperial_age', 'hoardings', 'chemistry',
-                         'capped_ram', 'siege_ram', 'pikeman', 'halberdier']
+                event_techs = ['loom', 'imperial_age', 'hoardings', 'chemistry',
+                               'capped_ram', 'siege_ram',
+                               'pikeman', 'halberdier']
             else:
                 raise AssertionError(f'No techs specified for minigame {name}.')
         else:
-            techs = e.techs
-        for tech in techs:
+            event_techs = e.techs
+        for tech in event_techs:
             self._add_effect_research_tech(trigger, tech)
 
     def _name_variables(self) -> None:
         """Sets the names for trigger variables in the scenario."""
-        # TODO don't access _parsed_data
-        trigger_piece = self._scn._parsed_data['TriggerPiece']
+        # Accesses _parsed_data directly, since interface is not yet finished.
+        trigger_piece = self._scn._parsed_data['TriggerPiece'] # pylint: disable=protected-access
         var_count = trigger_piece.retrievers[6]
         var_change = trigger_piece.retrievers[7].data
         for name, __ in INITIAL_VARIABLES:
@@ -2156,8 +2157,15 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
     fight_data_list = event.load_fight_data(event_json)
     events = event.make_fights(units_scn, fight_data_list,
                                (FIGHT_CENTER_X, FIGHT_CENTER_Y), FIGHT_OFFSET)
-    xbow_scn = AoE2Scenario(xbow_template)
-    arena_scn = AoE2Scenario(arena_template)
+    xbow_scn = (AoE2Scenario(xbow_template)
+                if any(isinstance(e, Minigame) and e.name == 'Xbow Timer'
+                       for e in events)
+                else None)
+    arena_scn = (AoE2Scenario(arena_template)
+                 if any(isinstance(e, Minigame)
+                        and e.name == 'Capture the Relic'
+                        for e in events)
+                 else None)
     scn_data = ScnData(scn, events, xbow_scn, arena_scn)
     scn_data.setup_scenario()
     scn_data.write_to_file(output)
