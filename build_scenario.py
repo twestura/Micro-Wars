@@ -1904,8 +1904,8 @@ class ScnData:
             uid = util_units.get_id(u)
             util_units.set_x(u, MAP_WIDTH - 0.5)
             util_units.set_y(u, 0.5)
-            x = int(util_units.get_x(unit)) - 0 + p1_pos[0]
-            y = int(util_units.get_y(unit)) - 0 + p1_pos[1]
+            x = int(util_units.get_x(unit)) - 0 + p1_pos[0] + 1
+            y = int(util_units.get_y(unit)) - 0 + p1_pos[1] + 1
             util_triggers.add_effect_teleport(rts.begin, uid, x, y, 3)
             util_triggers.add_effect_change_own_unit(rts.begin, 3, 1, uid)
 
@@ -1916,7 +1916,7 @@ class ScnData:
             uid = util_units.get_id(u)
             util_units.set_x(u, MAP_WIDTH - 0.5)
             util_units.set_y(u, 0.5)
-            x = int(util_units.get_x(unit)) - 19 + p2_pos[0]
+            x = int(util_units.get_x(unit)) - 19 + p2_pos[0] + 1
             y = int(util_units.get_y(unit)) - 9 + p2_pos[1]
             util_triggers.add_effect_teleport(rts.begin, uid, x, y, 3)
             util_triggers.add_effect_change_own_unit(rts.begin, 3, 2, uid)
@@ -1928,8 +1928,8 @@ class ScnData:
             uid = util_units.get_id(u)
             util_units.set_x(u, MAP_WIDTH - 0.5)
             util_units.set_y(u, 0.5)
-            x = int(util_units.get_x(unit)) - 0 + p1_pos[0]
-            y = int(util_units.get_y(unit)) - 10 + p1_pos[1]
+            x = int(util_units.get_x(unit)) - 0 + p1_pos[0] + 1
+            y = int(util_units.get_y(unit)) - 10 + p1_pos[1] + 1
             util_triggers.add_effect_teleport(begin2, uid, x, y, 3)
             util_triggers.add_effect_change_own_unit(begin2, 3, 1, uid)
 
@@ -1940,7 +1940,7 @@ class ScnData:
             uid = util_units.get_id(u)
             util_units.set_x(u, MAP_WIDTH - 0.5)
             util_units.set_y(u, 0.5)
-            x = int(util_units.get_x(unit)) - 19 + p2_pos[0]
+            x = int(util_units.get_x(unit)) - 19 + p2_pos[0] + 1
             y = int(util_units.get_y(unit)) - 19 + p2_pos[1]
             util_triggers.add_effect_teleport(begin2, uid, x, y, 3)
             util_triggers.add_effect_change_own_unit(begin2, 3, 2, uid)
@@ -1952,8 +1952,8 @@ class ScnData:
             uid = util_units.get_id(u)
             util_units.set_x(u, MAP_WIDTH - 0.5)
             util_units.set_y(u, 0.5)
-            x = int(util_units.get_x(unit)) - 0 + p1_pos[0]
-            y = int(util_units.get_y(unit)) - 20 + p1_pos[1]
+            x = int(util_units.get_x(unit)) - 0 + p1_pos[0] + 1
+            y = int(util_units.get_y(unit)) - 20 + p1_pos[1] + 1
             util_triggers.add_effect_teleport(begin3, uid, x, y, 3)
             util_triggers.add_effect_change_own_unit(begin3, 3, 1, uid)
 
@@ -1964,7 +1964,7 @@ class ScnData:
             uid = util_units.get_id(u)
             util_units.set_x(u, MAP_WIDTH - 0.5)
             util_units.set_y(u, 0.5)
-            x = int(util_units.get_x(unit)) - 19 + p2_pos[0]
+            x = int(util_units.get_x(unit)) - 19 + p2_pos[0] + 1
             y = int(util_units.get_y(unit)) - 29 + p2_pos[1]
             util_triggers.add_effect_teleport(begin3, uid, x, y, 3)
             util_triggers.add_effect_change_own_unit(begin3, 3, 2, uid)
