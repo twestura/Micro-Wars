@@ -107,6 +107,7 @@ def add_effect_activate(source: TriggerObject, target: int) -> None:
     activate = source.add_effect(effects.activate_trigger)
     activate.trigger_id = target
 
+
 def add_effect_change_own_unit(trigger: TriggerObject, source: int, target: int,
                                uid: int) -> None:
     """
@@ -118,6 +119,7 @@ def add_effect_change_own_unit(trigger: TriggerObject, source: int, target: int,
     change_own.player_target = target
     change_own.selected_object_id = uid
     change_own.number_of_units_selected = 1
+
 
 def add_effect_deactivate(source: TriggerObject, target: int) -> None:
     """Adds an effect to source to dectivate the trigger with index target."""
