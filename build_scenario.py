@@ -705,6 +705,11 @@ class ScnData:
         diff_plus.operation = ChangeVarOp.add.value
         diff_plus.from_variable = self._var_ids['score-difference']
         diff_plus.message = 'score-difference'
+        p3_wood = trigger.add_effect(effects.modify_resource)
+        p3_wood.quantity = pts
+        p3_wood.tribute_list = util_triggers.ACC_ATTR_WOOD
+        p3_wood.player_source = 3
+        p3_wood.operation = ChangeVarOp.add.value
 
     def _add_effect_p2_score(self, trigger: TriggerObject,
                              pts: int) -> None:
@@ -719,6 +724,11 @@ class ScnData:
         diff_subtract.operation = ChangeVarOp.subtract.value
         diff_subtract.from_variable = self._var_ids['score-difference']
         diff_subtract.message = 'score-difference'
+        p3_food = trigger.add_effect(effects.modify_resource)
+        p3_food.quantity = pts
+        p3_food.tribute_list = util_triggers.ACC_ATTR_FOOD
+        p3_food.player_source = 3
+        p3_food.operation = ChangeVarOp.add.value
 
     def _add_effect_research_tech(self, trigger: TriggerObject,
                                   tech_name: str) -> None:

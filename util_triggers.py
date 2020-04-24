@@ -12,6 +12,14 @@ from AoE2ScenarioParser.objects.effect_obj import EffectObject
 from AoE2ScenarioParser.objects.trigger_obj import TriggerObject
 
 
+# Index of Food in the accumulate attribute condition list.
+ACC_ATTR_FOOD = 0
+
+
+# Index of Wood in the accumulate attribute condition list.
+ACC_ATTR_WOOD = 1
+
+
 # Index of Stone in the accumulate attribute condition list.
 ACC_ATTR_STONE = 2
 
