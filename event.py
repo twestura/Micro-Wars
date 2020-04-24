@@ -155,6 +155,7 @@ class Fight:
             raise ValueError('Player 2 has no units.')
 
         self._p2_bonus = MAX_POINTS
+        num_points = 0
         for unit in self.p1_units:
             name = util_units.get_name(unit)
             if name not in self.points:

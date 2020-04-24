@@ -13,7 +13,14 @@
         }
     },
     {
-        "techs": ["feudal_age"],
+        "techs": ["feudal_age", "man_at_arms"],
+        "points": {
+            "eagle_scout": 25,
+            "man_at_arms": 15
+        }
+    },
+    {
+        "techs": [],
         "points": {
             "scout_cavalry": 12,
             "spearman": 8
@@ -23,7 +30,7 @@
         "techs": ["fletching"],
         "points": {
             "scout_cavalry": 4,
-            "archer": 5,
+            "archer": 6,
             "skirmisher": 4,
             "spearman": 3
         }
@@ -38,11 +45,14 @@
     {
         "techs": [
             "bloodlines", "husbandry", "elite_skirmisher",
-            "scale_barding_armor", "chain_barding_armor"
+            "scale_barding_armor", "chain_barding_armor",
+            "light_cavalry", "squires", "scale_mail_armor", "chain_mail_armor",
+            "forging", "iron_casting"
         ],
         "points": {
             "knight": 8,
-            "monk": 10,
+            "pikeman": 3,
+            "light_cavalry": 3,
             "elite_skirmisher": 4,
             "cavalry_archer": 5
         }
@@ -52,8 +62,16 @@
             "padded_archer_armor", "leather_archer_armor", "ring_archer_armor",
             "ballistics", "thumb_ring",
             "imperial_age",
-            "bracer", "chemistry", "arbalester",
-            "onager", "siege_onager", "siege_engineers", "drill"
+            "bracer", "chemistry", "capped_ram", "siege_ram"
+        ],
+        "points": {
+            "elite_plumed_archer": 2,
+            "siege_ram": 10
+        }
+    },
+    {
+        "techs": [
+            "arbalester", "onager", "siege_onager", "siege_engineers", "drill"
         ],
         "points": {
             "arbalester": 1,

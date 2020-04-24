@@ -1629,11 +1629,11 @@ class ScnData:
         timer_r1 = rts.begin.add_effect(effects.display_timer)
         timer_r1.variable_or_timer = 0
         timer_r1.time_unit = util_triggers.TimerUnits.minutes.value
-        timer_r1.display_time = 2
+        timer_r1.display_time = 1
         timer_r1.message = '<BLUE>%d until Crossbowman.'
         res_xbow_1 = self._add_trigger(res_xbow_1_name)
         res_xbow_1.enabled = False
-        util_triggers.add_cond_timer(res_xbow_1, 120)
+        util_triggers.add_cond_timer(res_xbow_1, 60)
         self._add_activate(rts.names.begin, res_xbow_1_name)
         xbow1 = res_xbow_1.add_effect(effects.replace_object)
         xbow1.player_source = 1
@@ -1809,11 +1809,11 @@ class ScnData:
         timer_r2 = begin2.add_effect(effects.display_timer)
         timer_r2.variable_or_timer = 0
         timer_r2.time_unit = util_triggers.TimerUnits.minutes.value
-        timer_r2.display_time = 2
+        timer_r2.display_time = 1
         timer_r2.message = '<RED>%d until Crossbowman.'
         res_xbow_2 = self._add_trigger(res_xbow_2_name)
         res_xbow_2.enabled = False
-        util_triggers.add_cond_timer(res_xbow_2, 120)
+        util_triggers.add_cond_timer(res_xbow_2, 60)
         self._add_activate(begin2_name, res_xbow_2_name)
         xbow2 = res_xbow_2.add_effect(effects.replace_object)
         xbow2.player_source = 2
