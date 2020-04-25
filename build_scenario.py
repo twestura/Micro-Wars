@@ -1694,8 +1694,7 @@ class ScnData:
             change_pts = self._add_trigger(change_pts_name)
             change_pts.enabled = False
             self._add_activate(rts.names.begin, change_pts_name)
-            galley_sunk = change_pts.add_condition(conditions.destroy_object)
-            galley_sunk.unit_object = uid
+            util_triggers.add_cond_hp0(change_pts, uid)
             if player == 1:
                 self._add_effect_p2_score(change_pts, 10)
                 self._add_deactivate(rts.names.p1_wins, change_pts_name)
@@ -2499,8 +2498,7 @@ class ScnData:
             self._add_activate(rts.names.begin, pts_name)
             self._add_deactivate(rts.names.cleanup, pts_name)
             award_pts = self._add_trigger(pts_name)
-            unit_killed = award_pts.add_condition(conditions.destroy_object)
-            unit_killed.unit_object = uid
+            util_triggers.add_cond_hp0(award_pts, uid)
             king_death = kill_king_triggers[player]
             kill_unit = king_death.add_effect(effects.kill_object)
             kill_unit.number_of_units_selected = 1
@@ -2597,8 +2595,7 @@ class ScnData:
         change_pts = self._add_trigger(change_pts_name)
         change_pts.enabled = False
         self._add_activate(rts.names.begin, change_pts_name)
-        unit_killed = change_pts.add_condition(conditions.destroy_object)
-        unit_killed.unit_object = uid
+        util_triggers.add_cond_hp0(change_pts, uid)
         if from_player == 1:
             self._add_effect_p2_score(change_pts, pts)
             self._add_deactivate(rts.names.p1_wins, change_pts_name)
