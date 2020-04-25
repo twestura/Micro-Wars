@@ -71,6 +71,33 @@ XBOW_TEMPLATE = 'xbow-timer-template.aoe2scenario'
 ARENA_TEMPLATE = 'arena-units.aoe2scenario'
 
 
+# File input name for the all minigames scenario.
+ALL_MINIGAMES_EVENTS = 'event-minigames.json'
+
+
+# File output name for the all minigames scenario.
+ALL_MINIGAMES_OUTPUT = 'Minigames.aoe2scenario'
+
+
+# String names of all minigames.
+MINIGAME_NAMES = (
+    'Steal the Bacon',
+    'Galley Micro',
+    'Xbow Timer',
+    'Capture the Relic',
+    'DauT Castle',
+    'Castle Siege',
+    'Regicide'
+)
+
+
+# Maps a minigame name to its event file.
+INDIVIDUAL_MINIGAME_EVENTS = {
+    name: f"event1-{'-'.join(name.lower().split())}.json"
+    for name in MINIGAME_NAMES
+}
+
+
 # The number of scenario editor variables.
 NUM_VARIABLES = 256
 
@@ -2654,6 +2681,18 @@ def build_publish_files(args):
     raise AssertionError('Not implemented.')
 
 
+def build_minigames(args): # pylint: disable=unused-argument
+    """
+    Builds each minigame as an individual file, as well as one file
+    with all of the minigames.
+    """
+    for name, event_json in INDIVIDUAL_MINIGAME_EVENTS.items():
+        build_scenario(SCENARIO_TEMPLATE, UNIT_TEMPLATE, event_json,
+                       XBOW_TEMPLATE, ARENA_TEMPLATE, f'{name}.aoe2scenario')
+    build_scenario(SCENARIO_TEMPLATE, UNIT_TEMPLATE, ALL_MINIGAMES_EVENTS,
+                   XBOW_TEMPLATE, ARENA_TEMPLATE, ALL_MINIGAMES_OUTPUT)
+
+
 def scratch(args): # pylint: disable=unused-argument
     """Runs a simple test experiment."""
     # scratch_path = 'scratch.aoe2scenario'
@@ -2692,6 +2731,9 @@ def main():
                                            help='Creates mod upload files.')
     parser_publish.set_defaults(func=build_publish_files)
 
+    parser_minigames = subparsers.add_parser('minigames',
+                                             help='Creates minigame scenarios.')
+    parser_minigames.set_defaults(func=build_minigames)
 
     parser_scratch = subparsers.add_parser('scratch', help='Runs a test.')
     parser_scratch.set_defaults(func=scratch)
