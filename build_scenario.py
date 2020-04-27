@@ -82,6 +82,7 @@ ALL_MINIGAMES_OUTPUT = 'Minigames.aoe2scenario'
 # String names of all minigames.
 MINIGAME_NAMES = (
     'Steal the Bacon',
+    'Tower Battlefield',
     'Galley Micro',
     'Xbow Timer',
     'Capture the Relic',
@@ -113,6 +114,8 @@ INITIAL_VARIABLES = [
     ('round', 0),
     ('p1-boar', 0),
     ('p2-boar', 0),
+    ('p1-battlefield-points', 0),
+    ('p2-battlefield-points', 0),
     ('p1-most-relics', 0),
     ('p2-most-relics', 0),
     ('p1-king-killed', 0),
@@ -241,8 +244,47 @@ BOAR_SC_2 = 39911
 BOAR_POINTS = 20
 
 
+# The number of points awarded every interval for holding a Flag.
+TOWER_AWARD_POINTS = 1
+
+
+# The number of seconds to wait to award points for holding a Flag.
+TOWER_AWARD_TIME = 5
+
+
+# The maximum number of Towers that can surround a Tower Battlefield Flag.
+TOWER_MAX_NUM = 5
+# TODO setting to the area of 25 tiles caused a memory error, so for now
+# I'll call it a tie if both players have at least 5 towers.
+# TOWER_MAX_NUM = 25
+
+
 # Unit constant for a Wild Boar.
 UCONST_BOAR = 48
+
+
+# Unit constant for an Archery Range.
+UCONST_ARCHERY_RANGE = 87
+
+
+# Unit constant for a Barracks.
+UCONST_BARRACKS = 12
+
+
+# Unit constant for a House.
+UCONST_HOUSE = 70
+
+
+# Unit constant for a Stable.
+UCONST_STABLE = 101
+
+
+# Unit constant for a Town Center.
+UCONST_TC = 109
+
+
+# Unit constant for a Watch Tower.
+UCONST_WATCH_TOWER = 79
 
 
 # Unit constant for a Scout Cavalry.
@@ -339,13 +381,14 @@ REGICIDE_KING_ID_P2 = 52916
 
 # Center positions of minigames to be used when changing the view.
 MINIGAME_CENTERS = {
-    'Regicide': (200, 40),
     'Steal the Bacon': (200, 120),
+    'Tower Battlefield': (200, 200),
     'Galley Micro': (119, 200),
     'Xbow Timer': (40, 200),
     'Capture the Relic': (40, 120),
     'DauT Castle': (36, 36),
     'Castle Siege': (120, 40),
+    'Regicide': (200, 40),
 }
 
 
@@ -353,8 +396,30 @@ def map_revealer_pos(pos: Tuple[int, int]) -> List[Tuple[int, int]]:
     """Yields a set of map revealers locations centered around pos."""
     x, y = pos
     return [(a, b)
-            for a in range(x - 24, x + 25, 3)
-            for b in range(y - 24, y + 25, 3)]
+            for a in range(x - 27, x + 28, 3)
+            for b in range(y - 27, y + 28, 3)]
+
+
+def _tb_hold_flag_name(index: int, player: int, flag: str) -> str:
+    """
+    Returns the name of the trigger of tower battlefields in
+    the given round for increasing the score of the player
+    holding the given flag.
+
+    index is the round index of the Tower Battlefield minigame.
+    player is 1 or 2.
+    flag is one of 'A', 'B', or 'C'.
+    """
+    return f'[R{index}] Player {player} Holds Flag {flag}'
+
+
+def _tb_defeated_name(index: int, player: int, enemy_points: int) -> str:
+    """
+    Returns the name of the trigger of tower battlefields in
+    the given round index for the player being defeated when
+    the other player has scored the given number of points.
+    """
+    return f'[R{index}] Player {player} Defeated with {enemy_points} P2 Points Scored' # pylint: disable=line-too-long
 
 
 class _TriggerNames:
@@ -783,6 +848,8 @@ class ScnData:
             name = e.name
             if name == 'Steal the Bacon':
                 event_techs = ['loom']
+            elif name == 'Tower Battlefield':
+                event_techs = ['loom', 'feudal_age', 'man_at_arms']
             elif name == 'Galley Micro':
                 event_techs = ['fletching']
             elif name == 'Xbow Timer':
@@ -1119,6 +1186,8 @@ class ScnData:
         assert self._round_objectives[index] == []
         if mg.name == 'Steal the Bacon':
             self._add_steal_the_bacon_objectives(index)
+        elif mg.name == 'Tower Battlefield':
+            self._add_tower_battlefield_objectives(index)
         elif mg.name == 'Galley Micro':
             self._add_galley_micro_objectives(index)
         elif mg.name == 'Xbow Timer':
@@ -1177,6 +1246,60 @@ class ScnData:
         boar2_var.amount_or_quantity = 5
         boar2_var.variable = self._var_ids['p2-boar']
         boar2_var.comparison = VarValComp.equal.value
+
+    def _add_tower_battlefield_objectives(self, index: int) -> None:
+        """Adds the objectives for the Tower Battlefield minigame."""
+        obj_tower_header_name = f'[O] Round {index} Tower Battlefield'
+        self._round_objectives[index].append(obj_tower_header_name)
+        obj_tower_header = self._add_trigger(obj_tower_header_name)
+        obj_tower_header.enabled = False
+        obj_tower_header.description = 'Tower Battlefield'
+        obj_tower_header.short_description = 'Tower Battlefield'
+        obj_tower_header.display_as_objective = True
+        obj_tower_header.display_on_screen = True
+        obj_tower_header.description_order = 50
+        obj_tower_header.mute_objectives = True
+        util_triggers.add_cond_gaia_defeated(obj_tower_header)
+
+        obj_tower_desc_name = f'[O] Round {index} Tower Battlefield Description'
+        self._round_objectives[index].append(obj_tower_desc_name)
+        obj_tower_desc = self._add_trigger(obj_tower_desc_name)
+        obj_tower_desc.enabled = False
+        obj_tower_desc.description = 'Control a Flag build building more Towers near it than your opponent. You gain 1 point every 5 seconds you control a Flag. Collection 100 points to win the round.' # pylint: disable=line-too-long
+        obj_tower_desc.display_as_objective = True
+        obj_tower_desc.description_order = 49
+        obj_tower_desc.mute_objectives = True
+        util_triggers.add_cond_gaia_defeated(obj_tower_desc)
+
+        obj_tower_p1_name = f'[O] Round {index} Tower Battlefield P1 Points'
+        self._round_objectives[index].append(obj_tower_p1_name)
+        obj_tower_p1 = self._add_trigger(obj_tower_p1_name)
+        obj_tower_p1.enabled = False
+        obj_tower_p1.description = 'Player 1: <p1-battlefield-points> / 100'
+        obj_tower_p1.short_description = 'P1: <p1-battlefield-points> / 100'
+        obj_tower_p1.display_as_objective = True
+        obj_tower_p1.display_on_screen = True
+        obj_tower_p1.description_order = 48
+        obj_tower_p1.mute_objectives = True
+        var1_cond = obj_tower_p1.add_condition(conditions.variable_value)
+        var1_cond.amount_or_quantity = event.MAX_POINTS
+        var1_cond.variable = self._var_ids['p1-battlefield-points']
+        var1_cond.comparison = VarValComp.equal.value
+
+        obj_tower_p2_name = f'[O] Round {index} Tower Battlefield P2 Points'
+        self._round_objectives[index].append(obj_tower_p2_name)
+        obj_tower_p2 = self._add_trigger(obj_tower_p2_name)
+        obj_tower_p2.enabled = False
+        obj_tower_p2.description = 'Player 2: <p2-battlefield-points> / 100'
+        obj_tower_p2.short_description = 'P2: <p2-battlefield-points> / 100'
+        obj_tower_p2.display_as_objective = True
+        obj_tower_p2.display_on_screen = True
+        obj_tower_p2.description_order = 47
+        obj_tower_p2.mute_objectives = True
+        var1_cond = obj_tower_p2.add_condition(conditions.variable_value)
+        var1_cond.amount_or_quantity = event.MAX_POINTS
+        var1_cond.variable = self._var_ids['p2-battlefield-points']
+        var1_cond.comparison = VarValComp.equal.value
 
     def _add_galley_micro_objectives(self, index: int) -> None:
         """Adds the objectives for the Galley Micro minigame."""
@@ -1529,6 +1652,8 @@ class ScnData:
         """Adds the minigame mg with the given index."""
         if mg.name == 'Steal the Bacon':
             self._add_steal_the_bacon(index)
+        elif mg.name == 'Tower Battlefield':
+            self._add_tower_battlefield(index)
         elif mg.name == 'Galley Micro':
             self._add_galley_micro(index)
         elif mg.name == 'Xbow Timer':
@@ -1666,6 +1791,222 @@ class ScnData:
             cleanup_change.player_source = player_source
             cleanup_change.player_target = 3
             util_triggers.set_effect_area(cleanup_change, 160, 80, 239, 159)
+
+    def _add_tower_battlefield(self, index: int) -> None:
+        """
+        Adds the Tower Battlefield minigame at the given index.
+
+        Checks the index is not 0 (cannot use a minigame as the tiebreaker).
+        """
+        assert index
+        rts = _RoundTriggers(self, index)
+        umgr = self._scn.object_manager.unit_manager
+        prefix = f'[R{index}]'
+
+        # TODO disable buildings/technologies
+
+        for res in (util_triggers.ACC_ATTR_WOOD, util_triggers.ACC_ATTR_FOOD,
+                    util_triggers.ACC_ATTR_GOLD):
+            util_triggers.add_effect_modify_res(rts.begin, 10000, res)
+        util_triggers.add_effect_modify_res(rts.begin, 300,
+                                            util_triggers.ACC_ATTR_STONE)
+
+        # Begin changes ownership.
+        p3_units = umgr.get_units_in_area(160.0, 160.0, 240.0, 240.0,
+                                          players=[Player.THREE])
+        next_flag = 'A'
+        flags = dict()
+        for unit in p3_units:
+            if unit.unit_id == FLAG_A_UCONST:
+                flags[next_flag] = unit
+                next_flag = chr(ord(next_flag) + 1)
+            else:
+                pos = unit.x + unit.y
+                player_target = 1 if pos < 400.0 else 2
+                util_triggers.add_effect_change_own_unit(
+                    rts.begin, 3, player_target, unit.reference_id)
+
+        # Looping triggers for adding points while a player holds a flag.
+        add_points_names = []
+        for player in (1, 2):
+            for flag in flags:
+                name = _tb_hold_flag_name(index, player, flag)
+                add_points_names.append(name)
+                add_points = self._add_trigger(name)
+                add_points.enabled = False
+                add_points.looping = True
+                self._add_deactivate(rts.names.p1_wins, name)
+                self._add_deactivate(rts.names.p2_wins, name)
+                util_triggers.add_cond_timer(add_points, TOWER_AWARD_TIME)
+                for p in (1, 2):
+                    bound = add_points.add_condition(conditions.variable_value)
+                    bound.amount_or_quantity = event.MAX_POINTS
+                    bound.variable = self._var_ids[f'p{p}-battlefield-points']
+                    bound.comparison = VarValComp.less.value
+                if player == 1:
+                    self._add_effect_p1_score(add_points, TOWER_AWARD_POINTS)
+                else:
+                    self._add_effect_p2_score(add_points, TOWER_AWARD_POINTS)
+                add = add_points.add_effect(effects.change_variable)
+                add.quantity = TOWER_AWARD_POINTS
+                add.operation = ChangeVarOp.add.value
+                var_add_name = f'p{player}-battlefield-points'
+                add.from_variable = self._var_ids[var_add_name]
+                add.message = var_add_name
+
+        scoring_trigger_names = []
+        for i in range(TOWER_MAX_NUM + 1):
+            for j in range(TOWER_MAX_NUM + 1):
+            # TODO the next line is for the "full" towers, not the "cutoff"
+            # versions to avoid the MemoryError.
+            # for j in range(TOWER_MAX_NUM + 1 - i):
+                for flag, unit in flags.items():
+                    name = f'{prefix} Capture Flag {flag} with Score {i}-{j}'
+                    scoring_trigger_names.append(name)
+                    capture = self._add_trigger(name)
+                    capture.enabled = False
+                    capture.looping = True
+                    self._add_activate(rts.names.begin, name)
+                    x1 = int(unit.x) - 2
+                    y1 = int(unit.y) - 2
+                    x2 = int(unit.x) + 2
+                    y2 = int(unit.y) + 2
+                    # p1 score not >= i + 1.
+                    p1_upper = capture.add_condition(conditions.object_in_area)
+                    p1_upper.inverted = True
+                    p1_upper.player = 1
+                    p1_upper.amount_or_quantity = i + 1
+                    p1_upper.object_list = UCONST_WATCH_TOWER
+                    # p1 score >= i.
+                    p1_lower = capture.add_condition(conditions.object_in_area)
+                    p1_lower.player = 1
+                    p1_lower.amount_or_quantity = i
+                    p1_lower.object_list = UCONST_WATCH_TOWER
+                    # p2 score not >= j + 1.
+                    p2_upper = capture.add_condition(conditions.object_in_area)
+                    p2_upper.inverted = True
+                    p2_upper.player = 2
+                    p2_upper.amount_or_quantity = j + 1
+                    p2_upper.object_list = UCONST_WATCH_TOWER
+                    # p2 score >= j.
+                    p2_lower = capture.add_condition(conditions.object_in_area)
+                    p2_lower.player = 2
+                    p2_lower.amount_or_quantity = j
+                    p2_lower.object_list = UCONST_WATCH_TOWER
+                    for cond in (p1_upper, p1_lower, p2_upper, p2_lower):
+                        util_triggers.set_cond_area(cond, x1, y1, x2, y2)
+                    if i < j:
+                        util_triggers.add_effect_change_own_unit(
+                            capture, 1, 2, unit.reference_id)
+                        util_triggers.add_effect_change_own_unit(
+                            capture, 3, 2, unit.reference_id)
+                        self._add_deactivate(
+                            name, _tb_hold_flag_name(index, 1, flag))
+                        self._add_activate(
+                            name, _tb_hold_flag_name(index, 2, flag))
+                    elif i == j:
+                        util_triggers.add_effect_change_own_unit(
+                            capture, 1, 3, unit.reference_id)
+                        util_triggers.add_effect_change_own_unit(
+                            capture, 2, 3, unit.reference_id)
+                        self._add_deactivate(
+                            name, _tb_hold_flag_name(index, 1, flag))
+                        self._add_deactivate(
+                            name, _tb_hold_flag_name(index, 2, flag))
+                    else:
+                        util_triggers.add_effect_change_own_unit(
+                            capture, 2, 1, unit.reference_id)
+                        util_triggers.add_effect_change_own_unit(
+                            capture, 3, 1, unit.reference_id)
+                        self._add_activate(
+                            name, _tb_hold_flag_name(index, 1, flag))
+                        self._add_deactivate(
+                            name, _tb_hold_flag_name(index, 2, flag))
+
+        starting_building_constants = {
+            UCONST_ARCHERY_RANGE, UCONST_BARRACKS, UCONST_STABLE, UCONST_TC
+        }
+        for player in (1, 2):
+            for enemy_points in range(event.MAX_POINTS):
+                defeated_name = _tb_defeated_name(index, player, enemy_points)
+                defeated = self._add_trigger(defeated_name)
+                self._add_activate(rts.names.begin, defeated_name)
+                self._add_deactivate(rts.names.p1_wins, defeated_name)
+                self._add_deactivate(rts.names.p2_wins, defeated_name)
+                for point_name in add_points_names:
+                    self._add_deactivate(defeated_name, point_name)
+                for scoring_trigger_name in scoring_trigger_names:
+                    self._add_deactivate(defeated_name, scoring_trigger_name)
+                # Deactivates all other such triggers.
+                for player_ in (1, 2):
+                    for enemy_points_ in range(event.MAX_POINTS):
+                        if player != player_ and enemy_points != enemy_points_:
+                            self._add_deactivate(
+                                defeated_name,
+                                _tb_defeated_name(index, player_, enemy_points_)
+                            )
+
+                # A player is defeated when they have no units and all of their
+                # starting buildings are destroyed.
+                util_triggers.add_cond_pop0(defeated, player)
+                for unit in p3_units:
+                    if unit.unit_id not in starting_building_constants:
+                        continue
+                    pos = unit.x + unit.y
+                    building_player = 1 if pos < 400.0 else 2
+                    if building_player != player:
+                        continue
+                    building_dead = defeated.add_condition(
+                        conditions.destroy_object)
+                    building_dead.unit_object = unit.reference_id
+                other_player = 2 if player == 1 else 1
+                other_points = defeated.add_condition(conditions.variable_value)
+                other_points.amount_or_quantity = enemy_points
+                other_var_name = f'p{other_player}-battlefield-points'
+                other_points.variable = self._var_ids[other_var_name]
+                other_points.comparison = VarValComp.equal.value
+                remaining_points = event.MAX_POINTS - enemy_points
+                add_points = defeated.add_effect(effects.change_variable)
+                add_points.quantity = remaining_points
+                add_points.operation = ChangeVarOp.add.value
+                add_points.from_variable = self._var_ids[other_var_name]
+                add_points.message = other_var_name
+                if player == 1:
+                    self._add_effect_p2_score(defeated, remaining_points)
+                else:
+                    self._add_effect_p1_score(defeated, remaining_points)
+
+        self._add_activate(rts.names.begin, rts.names.p1_wins)
+        var_p1 = rts.p1_wins.add_condition(conditions.variable_value)
+        var_p1.amount_or_quantity = event.MAX_POINTS
+        var_p1.variable = self._var_ids['p1-battlefield-points']
+        var_p1.comparison = VarValComp.equal.value
+        for scoring_trigger_name in scoring_trigger_names:
+            self._add_deactivate(rts.names.p1_wins, scoring_trigger_name)
+
+        self._add_activate(rts.names.begin, rts.names.p2_wins)
+        var_p2 = rts.p2_wins.add_condition(conditions.variable_value)
+        var_p2.amount_or_quantity = event.MAX_POINTS
+        var_p2.variable = self._var_ids['p2-battlefield-points']
+        var_p2.comparison = VarValComp.equal.value
+        for scoring_trigger_name in scoring_trigger_names:
+            self._add_deactivate(rts.names.p2_wins, scoring_trigger_name)
+
+        # Cleanup removes units from player control.
+        change_1_to_3 = rts.cleanup.add_effect(effects.change_ownership)
+        change_1_to_3.player_source = 1
+        change_1_to_3.player_target = 3
+        util_triggers.set_effect_area(change_1_to_3, 160, 160, 239, 239)
+        change_2_to_3 = rts.cleanup.add_effect(effects.change_ownership)
+        change_2_to_3.player_source = 2
+        change_2_to_3.player_target = 3
+        # Avoids removing P2's invisible object in the right corner.
+        util_triggers.set_effect_area(change_2_to_3, 160, 160, 238, 238)
+
+        for res in (util_triggers.ACC_ATTR_WOOD, util_triggers.ACC_ATTR_FOOD,
+                    util_triggers.ACC_ATTR_GOLD, util_triggers.ACC_ATTR_STONE):
+            util_triggers.add_effect_modify_res(rts.cleanup, 0, res)
+
 
     def _add_galley_micro(self, index: int) -> None:
         """
@@ -1989,6 +2330,7 @@ class ScnData:
         p1_pos = (19, 100)
         p2_pos = (59, 141)
 
+        self._add_effect_research_tech(rts.begin, 'atonement')
         begin2 = self._add_trigger(begin2_name)
         begin2.enabled = False
         util_triggers.add_cond_timer(begin2, 3)
@@ -1997,7 +2339,6 @@ class ScnData:
         begin3 = self._add_trigger(begin3_name)
         begin3.enabled = False
         util_triggers.add_cond_timer(begin3, 3)
-        self._add_effect_research_tech(begin3, 'atonement')
 
         # R1 - P1
         r1p1 = util_units.units_in_area(p1_template, 0.0, 0.0, 10.0, 10.0)
@@ -2695,7 +3036,7 @@ def scratch(args): # pylint: disable=unused-argument
     # scratch_path = 'scratch.aoe2scenario'
     scn = AoE2Scenario(SCENARIO_TEMPLATE)
     umgr = scn.object_manager.unit_manager
-    unit_array = umgr.get_units_in_area(x1=160.0, y1=0.0, x2=240.0, y2=80.0,
+    unit_array = umgr.get_units_in_area(x1=160.0, y1=160.0, x2=240.0, y2=240.0,
                                         players=[Player.THREE])
     for u in unit_array:
         if u.unit_id == FLAG_A_UCONST:

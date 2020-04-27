@@ -6,7 +6,6 @@ GNU General Public License v3.0: See the LICENSE file.
 
 
 import copy
-from enum import Enum
 import json
 from typing import Dict, List, Tuple
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
@@ -43,27 +42,6 @@ def get_start_tile(index: int) -> Tuple[int, int]:
     """
     y, x = divmod(index, FIGHT_GRID_LENGTH)
     return x * TILE_WIDTH, y * TILE_WIDTH
-
-
-class Game(Enum):
-    """Indicates a hardcoded minigame."""
-    galley_micro = 4
-    capture_the_relic = 5
-    daut_castle = 6
-    castle_siege = 7
-
-
-def name_of(game: Game) -> str:
-    """Returns the string name of game."""
-    if game == Game.galley_micro:
-        return 'Galley Micro'
-    elif game == Game.capture_the_relic:
-        return 'Capture the Relic'
-    elif game == Game.daut_castle:
-        return 'DauT Castle'
-    elif game == Game.castle_siege:
-        return 'Castle Siege'
-    raise AssertionError(f'enum {game.value} does not have a name.')
 
 
 class Minigame:
