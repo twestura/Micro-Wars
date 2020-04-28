@@ -3124,14 +3124,17 @@ def build_minigames(args): # pylint: disable=unused-argument
     build_scenario(SCENARIO_TEMPLATE, UNIT_TEMPLATE, ALL_MINIGAMES_EVENTS,
                    XBOW_TEMPLATE, ARENA_TEMPLATE, ALL_MINIGAMES_OUTPUT)
     # Feudal
-    build_scenario(SCENARIO_TEMPLATE, UNIT_TEMPLATE, 'events-feudal.json',
-                   XBOW_TEMPLATE, ARENA_TEMPLATE, 'Feudal Skirmishes.json')
+    build_scenario(SCENARIO_TEMPLATE, 'unit-feudal.aoe2scenario',
+                   'events-feudal.json', XBOW_TEMPLATE, ARENA_TEMPLATE,
+                   'Feudal Skirmishes.json')
     # Castle
-    build_scenario(SCENARIO_TEMPLATE, UNIT_TEMPLATE, 'events-castle.json',
-                   XBOW_TEMPLATE, ARENA_TEMPLATE, 'Castle Warfare.json')
+    build_scenario(SCENARIO_TEMPLATE, 'unit-castle.aoe2scenario',
+                   'events-castle.json', XBOW_TEMPLATE, ARENA_TEMPLATE,
+                   'Castle Warfare.json')
     # Imperial
-    build_scenario(SCENARIO_TEMPLATE, UNIT_TEMPLATE, 'events-imperial.json',
-                   XBOW_TEMPLATE, ARENA_TEMPLATE, 'Imperial Conquest.json')
+    build_scenario(SCENARIO_TEMPLATE, 'unit-imperial.aoe2scenario',
+                   'events-imperial.json', XBOW_TEMPLATE, ARENA_TEMPLATE,
+                   'Imperial Conquest.json')
     # Fights Only
     build_scenario(SCENARIO_TEMPLATE, UNIT_TEMPLATE, 'events-fights.json',
                    XBOW_TEMPLATE, ARENA_TEMPLATE, 'Fights Only.json')
