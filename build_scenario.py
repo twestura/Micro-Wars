@@ -1846,6 +1846,7 @@ class ScnData:
         boar_dead = self._add_trigger(boar_dead_name)
         boar_dead.enabled = False
         for boar in boar_units:
+            # util_triggers.add_cond_hp0(boar_dead, boar.reference_id)
             destroy = boar_dead.add_condition(conditions.destroy_object)
             destroy.unit_object = boar.reference_id
         self._add_deactivate(boar_dead_name, rts.names.p1_wins)
@@ -3115,11 +3116,28 @@ def build_minigames(args): # pylint: disable=unused-argument
     Builds each minigame as an individual file, as well as one file
     with all of the minigames.
     """
+    # Individual minigames.
     for name, event_json in INDIVIDUAL_MINIGAME_EVENTS.items():
         build_scenario(SCENARIO_TEMPLATE, UNIT_TEMPLATE, event_json,
                        XBOW_TEMPLATE, ARENA_TEMPLATE, f'{name}.aoe2scenario')
+    # All minigames.
     build_scenario(SCENARIO_TEMPLATE, UNIT_TEMPLATE, ALL_MINIGAMES_EVENTS,
                    XBOW_TEMPLATE, ARENA_TEMPLATE, ALL_MINIGAMES_OUTPUT)
+    # Feudal
+    build_scenario(SCENARIO_TEMPLATE, UNIT_TEMPLATE, 'events-feudal.json',
+                   XBOW_TEMPLATE, ARENA_TEMPLATE, 'Feudal Skirmishes.json')
+    # Castle
+    build_scenario(SCENARIO_TEMPLATE, UNIT_TEMPLATE, 'events-castle.json',
+                   XBOW_TEMPLATE, ARENA_TEMPLATE, 'Castle Warfare.json')
+    # Imperial
+    build_scenario(SCENARIO_TEMPLATE, UNIT_TEMPLATE, 'events-imperial.json',
+                   XBOW_TEMPLATE, ARENA_TEMPLATE, 'Imperial Conquest.json')
+    # Fights Only
+    build_scenario(SCENARIO_TEMPLATE, UNIT_TEMPLATE, 'events-fights.json',
+                   XBOW_TEMPLATE, ARENA_TEMPLATE, 'Fights Only.json')
+    # Full
+    build_scenario(SCENARIO_TEMPLATE, UNIT_TEMPLATE, 'events.json',
+                   XBOW_TEMPLATE, ARENA_TEMPLATE, 'Full.json')
 
 
 def scratch(args): # pylint: disable=unused-argument

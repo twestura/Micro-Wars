@@ -44,16 +44,14 @@
     },
     {
         "techs": [
-            "bloodlines", "husbandry", "elite_skirmisher",
+            "bloodlines", "husbandry", "pikeman",
             "scale_barding_armor", "chain_barding_armor",
             "light_cavalry", "squires", "scale_mail_armor", "chain_mail_armor",
             "forging", "iron_casting"
         ],
         "points": {
-            "knight": 8,
+            "knight": 5,
             "pikeman": 3,
-            "light_cavalry": 3,
-            "elite_skirmisher": 4,
             "cavalry_archer": 5
         }
     },
@@ -62,11 +60,14 @@
             "padded_archer_armor", "leather_archer_armor", "ring_archer_armor",
             "ballistics", "thumb_ring",
             "imperial_age",
-            "bracer", "chemistry", "capped_ram", "siege_ram"
+            "bracer", "chemistry", "capped_ram", "siege_ram",
+            "eagle_warrior", "elite_eagle_warrior", "el_dorado"
         ],
         "points": {
-            "elite_plumed_archer": 2,
-            "siege_ram": 10
+            "elite_plumed_archer": 1,
+            "elite_eagle_warrior": 1,
+            "siege_ram": 5,
+            "onager": 5
         }
     },
     {

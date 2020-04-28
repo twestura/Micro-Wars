@@ -49,16 +49,14 @@
     "Capture the Relic",
     {
         "techs": [
-            "bloodlines", "husbandry", "elite_skirmisher",
+            "bloodlines", "husbandry", "pikeman",
             "scale_barding_armor", "chain_barding_armor",
             "light_cavalry", "squires", "scale_mail_armor", "chain_mail_armor",
             "forging", "iron_casting"
         ],
         "points": {
-            "knight": 8,
+            "knight": 5,
             "pikeman": 3,
-            "light_cavalry": 3,
-            "elite_skirmisher": 4,
             "cavalry_archer": 5
         }
     },
