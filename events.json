@@ -68,11 +68,14 @@
             "padded_archer_armor", "leather_archer_armor", "ring_archer_armor",
             "ballistics", "thumb_ring",
             "imperial_age",
-            "bracer", "chemistry", "capped_ram", "siege_ram"
+            "bracer", "chemistry", "capped_ram", "siege_ram",
+            "eagle_warrior", "elite_eagle_warrior", "el_dorado"
         ],
         "points": {
-            "elite_plumed_archer": 2,
-            "siege_ram": 10
+            "elite_plumed_archer": 1,
+            "elite_eagle_warrior": 1,
+            "siege_ram": 5,
+            "onager": 5
         }
     },
     "Castle Siege",

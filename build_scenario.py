@@ -40,7 +40,9 @@ from AoE2ScenarioParser.pieces.structs.unit import UnitStruct
 from AoE2ScenarioParser.pieces.structs.changed_variable import (
     ChangedVariableStruct
 )
-from AoE2ScenarioParser.datasets import conditions, effects, techs
+from AoE2ScenarioParser.datasets import (
+    buildings, conditions, effects, techs, units
+)
 from AoE2ScenarioParser.datasets.players import Player
 import event
 from event import Fight, Minigame
@@ -289,6 +291,14 @@ UCONST_WATCH_TOWER = 79
 
 # Unit constant for a Scout Cavalry.
 UCONST_SC = 448
+
+
+# Unit constant for a Female Villager.
+UCONST_VIL_F = 293
+
+
+# Unit constant for a Male Villager.
+UCONST_VIL_M = 83
 
 
 # Unit constant for an Archer.
@@ -851,24 +861,53 @@ class ScnData:
             elif name == 'Tower Battlefield':
                 event_techs = ['loom', 'feudal_age', 'man_at_arms']
             elif name == 'Galley Micro':
-                event_techs = ['fletching']
+                event_techs = ['feudal_age', 'fletching']
             elif name == 'Xbow Timer':
                 event_techs = ['feudal_age', 'fletching']
             elif name == 'Capture the Relic':
                 event_techs = ['castle_age', 'crossbowman', 'fletching',
                                'bodkin_arrow']
             elif name == 'DauT Castle':
-                event_techs = ['loom', 'castle_age', 'crossbowman',
-                               'elite_skirmisher', 'fletching', 'bodkin_arrow',
-                               'sanctity', 'atonement', 'redemption']
+                event_techs = [
+                    'loom', 'castle_age', 'crossbowman',
+                    'elite_skirmisher', 'fletching', 'bodkin_arrow',
+                    'sanctity', 'atonement', 'redemption',
+                    'bloodlines',
+                ]
             elif name == 'Castle Siege':
-                event_techs = ['loom', 'imperial_age', 'hoardings', 'chemistry',
-                               'capped_ram', 'siege_ram',
-                               'pikeman', 'halberdier']
+                event_techs = [
+                    'loom', 'imperial_age', 'hoardings', 'chemistry',
+                    'capped_ram', 'siege_ram',
+                    'pikeman', 'halberdier', 'squires',
+                    'elite_cataphract', 'logistica',
+                    'forging', 'iron_casting', 'blast_furnace',
+                    'scale_mail_armor', 'chain_mail_armor', 'plate_mail_armor',
+                    'scale_barding_armor', 'chain_barding_armor',
+                    'plate_barding_armor',
+                    'fletching', 'bodkin_arrow', 'bracer',
+                    'padded_archer_armor', 'leather_archer_armor',
+                    'ring_archer_armor',
+                    'thumb_ring', 'ballistics', 'chemistry',
+                    'siege_engineers',
+                    'bloodlines', 'husbandry',
+                ]
             elif name == 'Regicide':
                 event_techs = [
+                    'imperial_age',
+                    'squires', 'man_at_arms',
                     'long_swordsman', 'two_handed_swordsman', 'champion',
-                    'cavalier', 'paladin', 'elite_cataphract', 'logistica'
+                    'crossbowman', 'arbalester',
+                    'cavalier', 'paladin', 'elite_cataphract', 'logistica',
+                    'forging', 'iron_casting', 'blast_furnace',
+                    'scale_mail_armor', 'chain_mail_armor', 'plate_mail_armor',
+                    'scale_barding_armor', 'chain_barding_armor',
+                    'plate_barding_armor',
+                    'fletching', 'bodkin_arrow', 'bracer',
+                    'padded_archer_armor', 'leather_archer_armor',
+                    'ring_archer_armor',
+                    'thumb_ring', 'ballistics', 'chemistry',
+                    'siege_engineers',
+                    'bloodlines', 'husbandry',
                 ]
             else:
                 raise AssertionError(f'No techs specified for minigame {name}.')
@@ -952,6 +991,7 @@ class ScnData:
         self._add_start_timer()
         self._set_start_views()
         self._create_map_revealer_triggers()
+        self._change_train_locations()
         self._add_objectives()
         self._add_victory_conditions()
 
@@ -1051,6 +1091,33 @@ class ScnData:
             remove.player_source = player
             remove.object_list_unit_id = UNIT_ID_MAP_REVEALER
             util_triggers.set_effect_area(remove, 0, 0, 239, 239)
+
+    def _change_train_locations(self) -> None:
+        """
+        Changes the train locations of various units and technologies
+        for the minigames.
+        """
+        change_locs = self._add_trigger('[I] Change Research/Train Locations')
+        for p in (1, 2):
+            for t in [techs.wheelbarrow, techs.supplies, techs.castle_age,
+                      techs.gold_mining, techs.stone_mining,
+                      techs.gold_shaft_mining, techs.stone_shaft_mining,
+                      techs.atonement, techs.redemption, techs.fervor,
+                      techs.sanctity, techs.heresy,
+                      techs.greek_fire, techs.logistica,
+                      techs.hoardings, techs.conscription,
+                      techs.spies_and_treason]:
+                tech = change_locs.add_effect(effects.change_research_location)
+                tech.player_source = p
+                tech.technology = t
+                tech.object_list_unit_id_2 = buildings.wonder
+            for u in [units.cataphract, units.elite_cataphract,
+                      units.petard, units.trebuchet, units.trebuchet_packed]:
+                unit = change_locs.add_effect(effects.change_train_location)
+                unit.player_source = p
+                unit.object_list_unit_id = u
+                unit.object_list_unit_id_2 = buildings.wonder
+
 
     def _add_objectives(self) -> None:
         """
@@ -1803,8 +1870,6 @@ class ScnData:
         umgr = self._scn.object_manager.unit_manager
         prefix = f'[R{index}]'
 
-        # TODO disable buildings/technologies
-
         for res in (util_triggers.ACC_ATTR_WOOD, util_triggers.ACC_ATTR_FOOD,
                     util_triggers.ACC_ATTR_GOLD):
             util_triggers.add_effect_modify_res(rts.begin, 10000, res)
@@ -1871,6 +1936,7 @@ class ScnData:
                     y1 = int(unit.y) - 2
                     x2 = int(unit.x) + 2
                     y2 = int(unit.y) + 2
+
                     # p1 score not >= i + 1.
                     p1_upper = capture.add_condition(conditions.object_in_area)
                     p1_upper.inverted = True
@@ -1896,6 +1962,14 @@ class ScnData:
                     for cond in (p1_upper, p1_lower, p2_upper, p2_lower):
                         util_triggers.set_cond_area(cond, x1, y1, x2, y2)
                     if i < j:
+                        owner = capture.add_condition(conditions.object_in_area)
+                        owner.inverted = True
+                        owner.player = 2
+                        owner.amount_or_quantity = 1
+                        owner.object_list = FLAG_A_UCONST
+                        util_triggers.set_cond_area(owner,
+                                                    int(unit.x), int(unit.y),
+                                                    int(unit.x), int(unit.y))
                         util_triggers.add_effect_change_own_unit(
                             capture, 1, 2, unit.reference_id)
                         util_triggers.add_effect_change_own_unit(
@@ -1905,6 +1979,14 @@ class ScnData:
                         self._add_activate(
                             name, _tb_hold_flag_name(index, 2, flag))
                     elif i == j:
+                        owner = capture.add_condition(conditions.object_in_area)
+                        owner.inverted = True
+                        owner.player = 3
+                        owner.amount_or_quantity = 1
+                        owner.object_list = FLAG_A_UCONST
+                        util_triggers.set_cond_area(owner,
+                                                    int(unit.x), int(unit.y),
+                                                    int(unit.x), int(unit.y))
                         util_triggers.add_effect_change_own_unit(
                             capture, 1, 3, unit.reference_id)
                         util_triggers.add_effect_change_own_unit(
@@ -1914,6 +1996,14 @@ class ScnData:
                         self._add_deactivate(
                             name, _tb_hold_flag_name(index, 2, flag))
                     else:
+                        owner = capture.add_condition(conditions.object_in_area)
+                        owner.inverted = True
+                        owner.player = 1
+                        owner.amount_or_quantity = 1
+                        owner.object_list = FLAG_A_UCONST
+                        util_triggers.set_cond_area(owner,
+                                                    int(unit.x), int(unit.y),
+                                                    int(unit.x), int(unit.y))
                         util_triggers.add_effect_change_own_unit(
                             capture, 2, 1, unit.reference_id)
                         util_triggers.add_effect_change_own_unit(
@@ -1993,15 +2083,19 @@ class ScnData:
             self._add_deactivate(rts.names.p2_wins, scoring_trigger_name)
 
         # Cleanup removes units from player control.
-        change_1_to_3 = rts.cleanup.add_effect(effects.change_ownership)
-        change_1_to_3.player_source = 1
-        change_1_to_3.player_target = 3
-        util_triggers.set_effect_area(change_1_to_3, 160, 160, 239, 239)
-        change_2_to_3 = rts.cleanup.add_effect(effects.change_ownership)
-        change_2_to_3.player_source = 2
-        change_2_to_3.player_target = 3
-        # Avoids removing P2's invisible object in the right corner.
-        util_triggers.set_effect_area(change_2_to_3, 160, 160, 238, 238)
+        for p in (1, 2):
+            change_to_3 = rts.cleanup.add_effect(effects.change_ownership)
+            change_to_3.player_source = p
+            change_to_3.player_target = 3
+            util_triggers.set_effect_area(change_to_3, 160, 160, 238, 238)
+        # Removes Villagers so P3 doesn't collect resources.
+        for p in (1, 2, 3):
+            for uid in (UCONST_VIL_F, UCONST_VIL_M):
+                remove_vils = rts.cleanup.add_effect(effects.remove_object)
+                remove_vils.player_source = p
+                remove_vils.object_list_unit_id = uid
+                util_triggers.set_effect_area(remove_vils, 160, 160, 238, 238)
+
 
         for res in (util_triggers.ACC_ATTR_WOOD, util_triggers.ACC_ATTR_FOOD,
                     util_triggers.ACC_ATTR_GOLD, util_triggers.ACC_ATTR_STONE):
@@ -2302,8 +2396,6 @@ class ScnData:
         """
         assert index
         rts = _RoundTriggers(self, index)
-
-        # TODO disable Monastery techs
 
         prefix = f'[R{index}]'
 
@@ -2701,7 +2793,6 @@ class ScnData:
         Checks the index is not 0 (cannot us a minigame as the tiebreaker).
         """
         assert index
-        # TODO disable Castle units and techs
         prefix = f'[R{index}]' if index else '[T]'
         rts = _RoundTriggers(self, index)
         p1_loses_castle_name = f'{prefix} Player 1 Loses Castle'
