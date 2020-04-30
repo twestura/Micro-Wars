@@ -991,6 +991,7 @@ class ScnData:
         self._add_start_timer()
         self._set_start_views()
         self._create_map_revealer_triggers()
+        self._remove_boar_food()
         self._change_train_locations()
         self._add_objectives()
         self._add_victory_conditions()
@@ -1092,6 +1093,20 @@ class ScnData:
             remove.object_list_unit_id = UNIT_ID_MAP_REVEALER
             util_triggers.set_effect_area(remove, 0, 0, 239, 239)
 
+    def _remove_boar_food(self) -> None:
+        """
+        Sets the food stored on Boar to 0 so the Steal the Bacon minigame
+        can be skipped quickly by deleting the Boar.
+        """
+        # TODO this doesn't work for some reason...
+        boar_food = self._add_trigger('[I] Set Boar Food to 0')
+        modify = boar_food.add_effect(effects.modify_attribute)
+        modify.quantity = 0
+        modify.object_list_unit_id = UCONST_BOAR
+        modify.player_source = Player.GAIA.value
+        modify.operation = ChangeVarOp.set_op.value
+        modify.object_attributes = 21 # Amount of First Resource
+
     def _change_train_locations(self) -> None:
         """
         Changes the train locations of various units and technologies
@@ -1099,11 +1114,22 @@ class ScnData:
         """
         change_locs = self._add_trigger('[I] Change Research/Train Locations')
         for p in (1, 2):
-            for t in [techs.wheelbarrow, techs.supplies, techs.castle_age,
+            for t in [techs.wheelbarrow, techs.hand_cart, techs.castle_age,
+                      techs.imperial_age, techs.town_patrol,
+                      techs.supplies, techs.long_swordsman, techs.pikeman,
+                      techs.squires, techs.two_handed_swordsman, techs.champion,
+                      techs.arson, techs.halberdier,
+                      techs.crossbowman, techs.arbalester,
+                      techs.elite_skirmisher, techs.thumb_ring,
+                      techs.heavy_cav_archer,
+                      techs.light_cavalry, techs.hussar,
+                      techs.husbandry, techs.cavalier, techs.paladin,
+                      techs.heavy_camel_rider,
                       techs.gold_mining, techs.stone_mining,
                       techs.gold_shaft_mining, techs.stone_shaft_mining,
                       techs.atonement, techs.redemption, techs.fervor,
-                      techs.sanctity, techs.heresy,
+                      techs.sanctity, techs.heresy, techs.block_printing,
+                      techs.illumination, techs.faith, techs.theocracy,
                       techs.greek_fire, techs.logistica,
                       techs.hoardings, techs.conscription,
                       techs.spies_and_treason]:
@@ -1112,7 +1138,11 @@ class ScnData:
                 tech.technology = t
                 tech.object_list_unit_id_2 = buildings.wonder
             for u in [units.cataphract, units.elite_cataphract,
-                      units.petard, units.trebuchet, units.trebuchet_packed]:
+                      units.petard, units.trebuchet, units.trebuchet_packed,
+                      units.knight, units.cavalier, units.paladin,
+                      units.camel_rider, units.heavy_camel_rider,
+                      units.cavalry_archer, units.heavy_cavalry_archer,
+                      units.hand_cannoneer]:
                 unit = change_locs.add_effect(effects.change_train_location)
                 unit.player_source = p
                 unit.object_list_unit_id = u
@@ -3126,21 +3156,21 @@ def build_minigames(args): # pylint: disable=unused-argument
     # Feudal
     build_scenario(SCENARIO_TEMPLATE, 'unit-feudal.aoe2scenario',
                    'events-feudal.json', XBOW_TEMPLATE, ARENA_TEMPLATE,
-                   'Feudal Skirmishes.json')
+                   'Feudal Skirmishes.aoe2scenario')
     # Castle
     build_scenario(SCENARIO_TEMPLATE, 'unit-castle.aoe2scenario',
                    'events-castle.json', XBOW_TEMPLATE, ARENA_TEMPLATE,
-                   'Castle Warfare.json')
+                   'Castle Warfare.aoe2scenario')
     # Imperial
     build_scenario(SCENARIO_TEMPLATE, 'unit-imperial.aoe2scenario',
                    'events-imperial.json', XBOW_TEMPLATE, ARENA_TEMPLATE,
-                   'Imperial Conquest.json')
+                   'Imperial Conquest.aoe2scenario')
     # Fights Only
     build_scenario(SCENARIO_TEMPLATE, UNIT_TEMPLATE, 'events-fights.json',
-                   XBOW_TEMPLATE, ARENA_TEMPLATE, 'Fights Only.json')
+                   XBOW_TEMPLATE, ARENA_TEMPLATE, 'Fights Only.aoe2scenario')
     # Full
     build_scenario(SCENARIO_TEMPLATE, UNIT_TEMPLATE, 'events.json',
-                   XBOW_TEMPLATE, ARENA_TEMPLATE, 'Full.json')
+                   XBOW_TEMPLATE, ARENA_TEMPLATE, 'Full.aoe2scenario')
 
 
 def scratch(args): # pylint: disable=unused-argument
