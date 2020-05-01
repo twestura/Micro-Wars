@@ -261,8 +261,16 @@ TOWER_MAX_NUM = 5
 # TOWER_MAX_NUM = 25
 
 
+# Unit constant for an Invisible Object.
+UCONST_INVISIBLE_OBJECT = 1291
+
+
 # Unit constant for a Wild Boar.
 UCONST_BOAR = 48
+
+
+# Unit constant for the Boar's dead unit.
+UCONST_BOAR_DEAD = 356
 
 
 # Unit constant for an Archery Range.
@@ -1100,12 +1108,13 @@ class ScnData:
         """
         # TODO this doesn't work for some reason...
         boar_food = self._add_trigger('[I] Set Boar Food to 0')
-        modify = boar_food.add_effect(effects.modify_attribute)
-        modify.quantity = 0
-        modify.object_list_unit_id = UCONST_BOAR
-        modify.player_source = Player.GAIA.value
-        modify.operation = ChangeVarOp.set_op.value
-        modify.object_attributes = 21 # Amount of First Resource
+        for uid in (UCONST_BOAR, UCONST_BOAR_DEAD):
+            modify = boar_food.add_effect(effects.modify_attribute)
+            modify.quantity = 0
+            modify.object_list_unit_id = uid
+            modify.player_source = Player.GAIA.value
+            modify.operation = ChangeVarOp.set_op.value
+            modify.object_attributes = 21 # Amount of First Resource
 
     def _change_train_locations(self) -> None:
         """
@@ -2283,13 +2292,16 @@ class ScnData:
         # Round 1
         for unit in archers:
             archer = util_units.copy_unit(self._scn, unit, 3)
+            archer.unit_id = UCONST_INVISIBLE_OBJECT
             uid = util_units.get_id(archer)
-            x = int(util_units.get_x(archer))
-            y = int(util_units.get_y(archer))
-            util_triggers.add_effect_teleport(rts.init, uid, x, y, 3)
+            replace = rts.init.add_effect(effects.replace_object)
+            replace.number_of_units_selected = 1
+            replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
+            replace.player_source = 3
+            replace.player_target = 3
+            replace.object_list_unit_id_2 = UCONST_ARCHER
+            replace.selected_object_id = uid
             util_triggers.add_effect_change_own_unit(rts.begin, 3, 1, uid)
-            util_units.set_x(archer, MAP_WIDTH - 0.5)
-            util_units.set_y(archer, 0.5)
             change_pts_name = f'{prefix} P1 loses Archer ({uid})'
             change_pts = self._add_trigger(change_pts_name)
             change_pts.enabled = False
@@ -2300,10 +2312,15 @@ class ScnData:
 
         for unit in skirms:
             skirm = util_units.copy_unit(self._scn, unit, 3)
+            skirm.unit_id = UCONST_INVISIBLE_OBJECT
             uid = util_units.get_id(skirm)
-            x = int(util_units.get_x(skirm))
-            y = int(util_units.get_y(skirm))
-            util_triggers.add_effect_teleport(rts.init, uid, x, y, 3)
+            replace = rts.init.add_effect(effects.replace_object)
+            replace.number_of_units_selected = 1
+            replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
+            replace.player_source = 3
+            replace.player_target = 3
+            replace.object_list_unit_id_2 = UCONST_SKIRM
+            replace.selected_object_id = uid
             skirm_pa = rts.init.add_effect(effects.change_object_armor)
             skirm_pa.aa_quantity = 1
             skirm_pa.aa_armor_or_attack_type = 3
@@ -2317,8 +2334,6 @@ class ScnData:
             skirm_ma.player_source = 3
             skirm_ma.selected_object_id = uid
             util_triggers.add_effect_change_own_unit(rts.begin, 3, 2, uid)
-            util_units.set_x(skirm, MAP_WIDTH - 0.5)
-            util_units.set_y(skirm, 0.5)
             change_pts_name = f'{prefix} P2 loses Skirmisher ({uid})'
             change_pts = self._add_trigger(change_pts_name)
             change_pts.enabled = False
@@ -2330,13 +2345,16 @@ class ScnData:
         # Round 2
         for unit in archers:
             archer = util_units.copy_unit(self._scn, unit, 3)
+            archer.unit_id = UCONST_INVISIBLE_OBJECT
             uid = util_units.get_id(archer)
-            x = int(util_units.get_x(archer))
-            y = int(util_units.get_y(archer))
-            util_triggers.add_effect_teleport(init2, uid, x, y, 3)
+            replace = init2.add_effect(effects.replace_object)
+            replace.number_of_units_selected = 1
+            replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
+            replace.player_source = 3
+            replace.player_target = 3
+            replace.object_list_unit_id_2 = UCONST_ARCHER
+            replace.selected_object_id = uid
             util_triggers.add_effect_change_own_unit(begin2, 3, 2, uid)
-            util_units.set_x(archer, MAP_WIDTH - 0.5)
-            util_units.set_y(archer, 0.5)
             change_pts_name = f'{prefix} P2 loses Archer ({uid})'
             change_pts = self._add_trigger(change_pts_name)
             change_pts.enabled = False
@@ -2347,10 +2365,15 @@ class ScnData:
 
         for unit in skirms:
             skirm = util_units.copy_unit(self._scn, unit, 3)
+            skirm.unit_id = UCONST_INVISIBLE_OBJECT
             uid = util_units.get_id(skirm)
-            x = int(util_units.get_x(skirm))
-            y = int(util_units.get_y(skirm))
-            util_triggers.add_effect_teleport(init2, uid, x, y, 3)
+            replace = init2.add_effect(effects.replace_object)
+            replace.number_of_units_selected = 1
+            replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
+            replace.player_source = 3
+            replace.player_target = 3
+            replace.object_list_unit_id_2 = UCONST_SKIRM
+            replace.selected_object_id = uid
             skirm_pa = init2.add_effect(effects.change_object_armor)
             skirm_pa.aa_quantity = 1
             skirm_pa.aa_armor_or_attack_type = 3
@@ -2364,8 +2387,6 @@ class ScnData:
             skirm_ma.player_source = 3
             skirm_ma.selected_object_id = uid
             util_triggers.add_effect_change_own_unit(begin2, 3, 1, uid)
-            util_units.set_x(skirm, MAP_WIDTH - 0.5)
-            util_units.set_y(skirm, 0.5)
             change_pts_name = f'{prefix} P1 loses Skirmisher ({uid})'
             change_pts = self._add_trigger(change_pts_name)
             change_pts.enabled = False
@@ -2462,6 +2483,8 @@ class ScnData:
         begin3 = self._add_trigger(begin3_name)
         begin3.enabled = False
         util_triggers.add_cond_timer(begin3, 3)
+
+        # Invisible objects cause issues with Monks, uses Teleportation instead.
 
         # R1 - P1
         r1p1 = util_units.units_in_area(p1_template, 0.0, 0.0, 10.0, 10.0)
@@ -3037,20 +3060,23 @@ class ScnData:
         assert from_player in (1, 2)
 
         u = util_units.copy_unit(self._scn, unit, 3)
+        uconst = u.unit_id
+        u.unit_id = UCONST_INVISIBLE_OBJECT
         uid = util_units.get_id(u)
 
-        # Hides the unit in the top corner.
-        util_units.set_x(u, MAP_WIDTH - 0.5)
-        util_units.set_y(u, 0.5)
+        replace = rts.init.add_effect(effects.replace_object)
+        replace.number_of_units_selected = 1
+        replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
+        replace.player_source = 3
+        replace.player_target = 3
+        replace.object_list_unit_id_2 = uconst
+        replace.selected_object_id = uid
 
-        util_triggers.add_effect_teleport(rts.init, uid, util_units.get_x(unit),
-                                          util_units.get_y(unit), 3)
-
-        # Begin handles ownership changes.
+        # # Begin handles ownership changes.
         util_triggers.add_effect_change_own_unit(rts.begin, 3, from_player, uid)
 
         # Changes points (using the player number).
-        unit_name = util_units.get_name(u)
+        unit_name = util_units.get_name(unit)
         pts = self._events[fight_index].points[unit_name]
         prefix = f'[R{fight_index}]' if fight_index else '[T]'
         pretty_name = util.pretty_print_name(unit_name)
