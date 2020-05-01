@@ -239,3 +239,29 @@ def center_units_flip(unit_array: List[UnitStruct], center: Tuple[float, float],
         new_pos = center_pos_flipped(unit, avg, center, offset)
         set_x(unit, new_pos[0])
         set_y(unit, new_pos[1])
+
+
+def rad_to_facet(theta: float) -> int:
+    """
+    Returns a Facet value in {0, 1, ..., 15} representing the facing
+    of a unit with facing value theta.
+
+    Raises a ValueError if theta is not in the interval [0, 2pi).
+    """
+    # TODO ok, actually need to figure out how the facets work...
+    if theta < 0.0 or theta >= math.tau:
+        raise ValueError(f'{theta} is not in [0, 2pi).')
+    return (round(16 * theta / math.tau) - 2) % 16
+
+
+def facet_to_rad(facet: int) -> float:
+    """
+    Returns the float value in [0, 2pi) representing the radian angle
+    at which a unit with the given facet is facing.
+
+    Raises a ValueError if facet is not between 0 and 15, inclusive.
+    """
+    if facet < 0 or facet > 15:
+        raise ValueError(f'{facet} is not between 0 and 15, inclusive.')
+    # TODO facets don't correspond to radians like this...
+    return facet * math.tau / 16.0

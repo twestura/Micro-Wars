@@ -2484,79 +2484,67 @@ class ScnData:
         begin3.enabled = False
         util_triggers.add_cond_timer(begin3, 3)
 
-        # Invisible objects cause issues with Monks, uses Teleportation instead.
+        # Invisible objects cause issues with Monks, uses Create Object instead.
 
         # R1 - P1
         r1p1 = util_units.units_in_area(p1_template, 0.0, 0.0, 10.0, 10.0)
         for unit in r1p1:
-            u = util_units.copy_unit(self._scn, unit, 3)
-            uid = util_units.get_id(u)
-            util_units.set_x(u, MAP_WIDTH - 0.5)
-            util_units.set_y(u, 0.5)
-            x = int(util_units.get_x(unit)) - 0 + p1_pos[0] + 1
-            y = int(util_units.get_y(unit)) - 0 + p1_pos[1] + 1
-            util_triggers.add_effect_teleport(rts.begin, uid, x, y, 3)
-            util_triggers.add_effect_change_own_unit(rts.begin, 3, 1, uid)
+            create = rts.begin.add_effect(effects.create_object)
+            create.object_list_unit_id = unit.unit_id
+            create.player_source = 1
+            create.facet = util_units.rad_to_facet(unit.rotation)
+            create.location_x = int(util_units.get_x(unit)) - 0 + p1_pos[0] + 1
+            create.location_y = int(util_units.get_y(unit)) - 0 + p1_pos[1] + 1
 
         # R1 - P2
         r1p2 = util_units.units_in_area(p2_template, 10.0, 0.0, 20.0, 10.0)
         for unit in r1p2:
-            u = util_units.copy_unit(self._scn, unit, 3)
-            uid = util_units.get_id(u)
-            util_units.set_x(u, MAP_WIDTH - 0.5)
-            util_units.set_y(u, 0.5)
-            x = int(util_units.get_x(unit)) - 19 + p2_pos[0] + 1
-            y = int(util_units.get_y(unit)) - 9 + p2_pos[1]
-            util_triggers.add_effect_teleport(rts.begin, uid, x, y, 3)
-            util_triggers.add_effect_change_own_unit(rts.begin, 3, 2, uid)
+            create = rts.begin.add_effect(effects.create_object)
+            create.object_list_unit_id = unit.unit_id
+            create.player_source = 2
+            create.facet = util_units.rad_to_facet(unit.rotation)
+            create.location_x = int(util_units.get_x(unit)) - 19 + p2_pos[0] + 1
+            create.location_y = int(util_units.get_y(unit)) - 9 + p2_pos[1]
 
         # R2 - P1
         r2p1 = util_units.units_in_area(p1_template, 0.0, 10.0, 10.0, 20.0)
         for unit in r2p1:
-            u = util_units.copy_unit(self._scn, unit, 3)
-            uid = util_units.get_id(u)
-            util_units.set_x(u, MAP_WIDTH - 0.5)
-            util_units.set_y(u, 0.5)
-            x = int(util_units.get_x(unit)) - 0 + p1_pos[0] + 1
-            y = int(util_units.get_y(unit)) - 10 + p1_pos[1] + 1
-            util_triggers.add_effect_teleport(begin2, uid, x, y, 3)
-            util_triggers.add_effect_change_own_unit(begin2, 3, 1, uid)
+            create = begin2.add_effect(effects.create_object)
+            create.object_list_unit_id = unit.unit_id
+            create.player_source = 1
+            create.facet = util_units.rad_to_facet(unit.rotation)
+            create.location_x = int(util_units.get_x(unit)) - 0 + p1_pos[0] + 1
+            create.location_y = int(util_units.get_y(unit)) - 10 + p1_pos[1] + 1
 
         # R2 - P2
         r2p2 = util_units.units_in_area(p2_template, 10.0, 10.0, 20.0, 20.0)
         for unit in r2p2:
-            u = util_units.copy_unit(self._scn, unit, 3)
-            uid = util_units.get_id(u)
-            util_units.set_x(u, MAP_WIDTH - 0.5)
-            util_units.set_y(u, 0.5)
-            x = int(util_units.get_x(unit)) - 19 + p2_pos[0] + 1
-            y = int(util_units.get_y(unit)) - 19 + p2_pos[1]
-            util_triggers.add_effect_teleport(begin2, uid, x, y, 3)
-            util_triggers.add_effect_change_own_unit(begin2, 3, 2, uid)
+            create = begin2.add_effect(effects.create_object)
+            create.object_list_unit_id = unit.unit_id
+            create.player_source = 2
+            create.facet = util_units.rad_to_facet(unit.rotation)
+            create.location_x = int(util_units.get_x(unit)) - 19 + p2_pos[0] + 1
+            create.location_y = int(util_units.get_y(unit)) - 19 + p2_pos[1]
 
         # R3 - P1
         r3p1 = util_units.units_in_area(p1_template, 0.0, 20.0, 10.0, 30.0)
         for unit in r3p1:
-            u = util_units.copy_unit(self._scn, unit, 3)
-            uid = util_units.get_id(u)
-            util_units.set_x(u, MAP_WIDTH - 0.5)
-            util_units.set_y(u, 0.5)
-            x = int(util_units.get_x(unit)) - 0 + p1_pos[0] + 1
-            y = int(util_units.get_y(unit)) - 20 + p1_pos[1] + 1
-            util_triggers.add_effect_teleport(begin3, uid, x, y, 3)
-            util_triggers.add_effect_change_own_unit(begin3, 3, 1, uid)
+            create = begin3.add_effect(effects.create_object)
+            create.object_list_unit_id = unit.unit_id
+            create.player_source = 1
+            create.facet = util_units.rad_to_facet(unit.rotation)
+            create.location_x = int(util_units.get_x(unit)) - 0 + p1_pos[0] + 1
+            create.location_y = int(util_units.get_y(unit)) - 20 + p1_pos[1] + 1
 
         # R3 - P2
         r3p2 = util_units.units_in_area(p2_template, 10.0, 20.0, 20.0, 30.0)
         for unit in r3p2:
-            u = util_units.copy_unit(self._scn, unit, 3)
-            uid = util_units.get_id(u)
-            util_units.set_x(u, MAP_WIDTH - 0.5)
-            util_units.set_y(u, 0.5)
-            x = int(util_units.get_x(unit)) - 19 + p2_pos[0] + 1
-            y = int(util_units.get_y(unit)) - 29 + p2_pos[1]
-            util_triggers.add_effect_teleport(begin3, uid, x, y, 3)
-            util_triggers.add_effect_change_own_unit(begin3, 3, 2, uid)
+            create = begin3.add_effect(effects.create_object)
+            create.object_list_unit_id = unit.unit_id
+            create.player_source = 2
+            create.facet = util_units.rad_to_facet(unit.rotation)
+            create.location_x = int(util_units.get_x(unit)) - 19 + p2_pos[0] + 1
+            create.location_y = int(util_units.get_y(unit)) - 29 + p2_pos[1]
 
         change_own_p1 = rts.begin.add_effect(effects.change_ownership)
         change_own_p1.player_source = 3
