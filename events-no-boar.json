@@ -1,0 +1,89 @@
+[
+    {
+        "techs": ["mahouts"],
+        "points": {
+            "elite_war_elephant": 0
+        }
+    },
+    {
+        "techs": ["loom"],
+        "points": {
+            "scout_cavalry": 40,
+            "militia": 20
+        }
+    },
+    {
+        "techs": ["feudal_age", "man_at_arms"],
+        "points": {
+            "eagle_scout": 25,
+            "man_at_arms": 15
+        }
+    },
+    "Tower Battlefield",
+    {
+        "techs": [],
+        "points": {
+            "scout_cavalry": 12,
+            "spearman": 8
+        }
+    },
+    "Galley Micro",
+    {
+        "techs": ["fletching"],
+        "points": {
+            "scout_cavalry": 4,
+            "archer": 6,
+            "skirmisher": 4,
+            "spearman": 3
+        }
+    },
+    "Xbow Timer",
+    {
+        "techs": ["castle_age", "bodkin_arrow"],
+        "points": {
+            "mangonel": 25,
+            "crossbowman": 2
+        }
+    },
+    "Capture the Relic",
+    {
+        "techs": [
+            "bloodlines", "husbandry", "pikeman",
+            "scale_barding_armor", "chain_barding_armor",
+            "light_cavalry", "squires", "scale_mail_armor", "chain_mail_armor",
+            "forging", "iron_casting"
+        ],
+        "points": {
+            "knight": 5,
+            "pikeman": 3,
+            "cavalry_archer": 5
+        }
+    },
+    "DauT Castle",
+    {
+        "techs": [
+            "padded_archer_armor", "leather_archer_armor", "ring_archer_armor",
+            "ballistics", "thumb_ring",
+            "imperial_age",
+            "bracer", "chemistry", "capped_ram", "siege_ram",
+            "eagle_warrior", "elite_eagle_warrior", "el_dorado"
+        ],
+        "points": {
+            "elite_plumed_archer": 1,
+            "elite_eagle_warrior": 1,
+            "siege_ram": 5,
+            "onager": 5
+        }
+    },
+    "Castle Siege",
+    {
+        "techs": [
+            "arbalester", "onager", "siege_onager", "siege_engineers", "drill"
+        ],
+        "points": {
+            "arbalester": 1,
+            "siege_onager": 5
+        }
+    },
+    "Regicide"
+]

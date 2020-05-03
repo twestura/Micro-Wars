@@ -853,7 +853,7 @@ class ScnData:
         if tech_name not in self._researched_techs:
             self._researched_techs.add(tech_name)
             tech_id = techs.tech_names.inverse[tech_name]
-            for player in (1, 2, 3):
+            for player in (0, 1, 2, 3):
                 util_triggers.add_effect_research_tech(trigger, tech_id, player)
 
     def _research_techs(self, trigger: TriggerObject, index: int) -> None:
@@ -1896,7 +1896,7 @@ class ScnData:
         for player_source in (1, 2):
             cleanup_change = rts.cleanup.add_effect(effects.change_ownership)
             cleanup_change.player_source = player_source
-            cleanup_change.player_target = 3
+            cleanup_change.player_target = 0 # TODO cleanup using gaia, not p3
             util_triggers.set_effect_area(cleanup_change, 160, 80, 239, 159)
 
     def _add_tower_battlefield(self, index: int) -> None:
@@ -2126,16 +2126,17 @@ class ScnData:
         for p in (1, 2):
             change_to_3 = rts.cleanup.add_effect(effects.change_ownership)
             change_to_3.player_source = p
-            change_to_3.player_target = 3
+            change_to_3.player_target = 0
             util_triggers.set_effect_area(change_to_3, 160, 160, 238, 238)
-        # Removes Villagers so P3 doesn't collect resources.
-        for p in (1, 2, 3):
-            for uid in (UCONST_VIL_F, UCONST_VIL_M):
-                remove_vils = rts.cleanup.add_effect(effects.remove_object)
-                remove_vils.player_source = p
-                remove_vils.object_list_unit_id = uid
-                util_triggers.set_effect_area(remove_vils, 160, 160, 238, 238)
-
+        # Removes Villagers so they stop gathering resources.
+        for uid in (units.villager_female, units.villager_male,
+                    units.lumberjack, units.stone_miner, units.gold_miner,
+                    units.farmer, units.hunter, units.builder, units.forager,
+                    units.shepherd, units.repairer, units.fisherman):
+            remove_vils = rts.cleanup.add_effect(effects.remove_object)
+            remove_vils.player_source = 0
+            remove_vils.object_list_unit_id = uid
+            util_triggers.set_effect_area(remove_vils, 160, 160, 238, 238)
 
         for res in (util_triggers.ACC_ATTR_WOOD, util_triggers.ACC_ATTR_FOOD,
                     util_triggers.ACC_ATTR_GOLD, util_triggers.ACC_ATTR_STONE):
@@ -2691,14 +2692,11 @@ class ScnData:
                 self._add_effect_p1_score(monastery_loss, 100)
 
         # Cleanup removes units from player control.
-        change_1_to_3 = rts.cleanup.add_effect(effects.change_ownership)
-        change_1_to_3.player_source = 1
-        change_1_to_3.player_target = 3
-        util_triggers.set_effect_area(change_1_to_3, 0, 80, 79, 159)
-        change_2_to_3 = rts.cleanup.add_effect(effects.change_ownership)
-        change_2_to_3.player_source = 2
-        change_2_to_3.player_target = 3
-        util_triggers.set_effect_area(change_2_to_3, 0, 80, 79, 159)
+        for player in (1, 2):
+            change_to_0 = rts.cleanup.add_effect(effects.change_ownership)
+            change_to_0.player_source = player
+            change_to_0.player_target = 0
+            util_triggers.set_effect_area(change_to_0, 0, 80, 79, 159)
 
         util_triggers.add_effect_modify_res(
             rts.cleanup, 0, util_triggers.ACC_ATTR_GOLD)
@@ -2814,15 +2812,12 @@ class ScnData:
         self._add_effect_p2_score(rts.p2_wins, event.MAX_POINTS)
 
         # Cleanup removes units from player control.
-        change_1_to_3 = rts.cleanup.add_effect(effects.change_ownership)
-        change_1_to_3.player_source = 1
-        change_1_to_3.player_target = 3
-        # Don't include (0, 0), since p1's Invisible Object is there.
-        util_triggers.set_effect_area(change_1_to_3, 1, 1, 79, 79)
-        change_2_to_3 = rts.cleanup.add_effect(effects.change_ownership)
-        change_2_to_3.player_source = 2
-        change_2_to_3.player_target = 3
-        util_triggers.set_effect_area(change_2_to_3, 0, 0, 79, 79)
+        for player in (1, 2):
+            change_to_0 = rts.cleanup.add_effect(effects.change_ownership)
+            change_to_0.player_source = player
+            change_to_0.player_target = 0
+            # Don't include (0, 0), since p1's Invisible Object is there.
+            util_triggers.set_effect_area(change_to_0, 1, 1, 79, 79)
 
         # Removes stone after round is over
         util_triggers.add_effect_modify_res(
@@ -2910,7 +2905,7 @@ class ScnData:
                 effects.change_ownership)
             change_from_player.number_of_units_selected = 1
             change_from_player.player_source = player_source
-            change_from_player.player_target = 3
+            change_from_player.player_target = 0
             change_from_player.selected_object_id = uid
 
         # Removes stone after round is over
@@ -3015,7 +3010,7 @@ class ScnData:
         for player_source in (1, 2):
             cleanup_change = rts.cleanup.add_effect(effects.change_ownership)
             cleanup_change.player_source = player_source
-            cleanup_change.player_target = 3
+            cleanup_change.player_target = 0
             util_triggers.set_effect_area(cleanup_change, 160, 0, 239, 79)
 
     def _add_fight(self, index: int, f: Fight) -> None:
@@ -3047,21 +3042,34 @@ class ScnData:
         """
         assert from_player in (1, 2)
 
-        u = util_units.copy_unit(self._scn, unit, 3)
-        uconst = u.unit_id
-        u.unit_id = UCONST_INVISIBLE_OBJECT
-        uid = util_units.get_id(u)
 
-        replace = rts.init.add_effect(effects.replace_object)
-        replace.number_of_units_selected = 1
-        replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
-        replace.player_source = 3
-        replace.player_target = 3
-        replace.object_list_unit_id_2 = uconst
-        replace.selected_object_id = uid
+        # The Replace Object triggers create Onagers and Siege Onagers with
+        # buggy projectiles.
+        is_onager = unit.unit_id in (units.onager, units.siege_onager)
+        storage_player = 0 if is_onager else from_player
+
+        u = util_units.copy_unit(self._scn, unit, storage_player)
+        uconst = u.unit_id
+        if not is_onager:
+            u.unit_id = UCONST_INVISIBLE_OBJECT
+        uid = u.reference_id
+        u.x = 237 if from_player == 1 else 239
+        u.y = 0 if from_player == 1 else 2
+
+        util_triggers.add_effect_teleport(
+            rts.init, uid, int(unit.x), int(unit.y), storage_player)
+        if not is_onager:
+            replace = rts.init.add_effect(effects.replace_object)
+            replace.number_of_units_selected = 1
+            replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
+            replace.player_source = from_player
+            replace.player_target = from_player
+            replace.object_list_unit_id_2 = uconst
+            replace.selected_object_id = uid
+        util_triggers.add_effect_change_own_unit(rts.init, from_player, 0, uid)
 
         # # Begin handles ownership changes.
-        util_triggers.add_effect_change_own_unit(rts.begin, 3, from_player, uid)
+        util_triggers.add_effect_change_own_unit(rts.begin, 0, from_player, uid)
 
         # Changes points (using the player number).
         unit_name = util_units.get_name(unit)
