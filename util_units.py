@@ -43,6 +43,28 @@ def copy_unit(scn: AoE2Scenario, unit: UnitStruct, player: int) -> UnitStruct:
     return u
 
 
+def remove(scn: AoE2Scenario, uid: int, p: Player) -> None:
+    """
+    Removes the unit with reference id uid from the given player in the
+    scenario.
+
+    Raises a ValueError if the unit does not exist.
+    """
+    player_units = scn._parsed_data['UnitsPiece'].retrievers[4].data[p.value] # pylint: disable=protected-access
+    index = None
+    for k, unit in enumerate(player_units.retrievers[1].data):
+        if unit.retrievers[3].data == uid:
+            index = k
+            break
+    if index is None:
+        raise ValueError(f'Player {p} has no unit {uid}.')
+
+    print(f'removing {uid}')
+    player_units.retrievers[0].data -= 1 # Decreases the array length.
+    del player_units.retrievers[1].data[index] # Removes unit from the array.
+
+
+
 def get_units_array(scn: AoE2Scenario, player: int) -> List[UnitStruct]:
     """
     Returns the array of units in scenario for the given player.

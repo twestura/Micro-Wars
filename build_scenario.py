@@ -525,6 +525,7 @@ class _RoundTriggers:
         self._index = index
         self._names = _TriggerNames(index)
 
+        # TODO Toggle map revealers before running init effects
         self._init = self._scn._add_trigger(self.names.init)
         if index:
             init_var = self._init.add_condition(conditions.variable_value)
@@ -2151,6 +2152,7 @@ class ScnData:
         """
         assert index
         rts = _RoundTriggers(self, index)
+        umgr = self._scn.object_manager.unit_manager
 
         self._add_activate(rts.names.begin, rts.names.p1_wins)
         util_triggers.add_cond_pop0(rts.p1_wins, 2)
@@ -2158,27 +2160,40 @@ class ScnData:
         util_triggers.add_cond_pop0(rts.p2_wins, 1)
 
         prefix = f'[R{index}]'
-        galleys = util_units.get_units_array(self._scn, 3)
-        galleys = util_units.units_in_area(galleys, 80, 160, 160, 240)
-        for galley in galleys:
-            pos = util_units.get_x(galley) + util_units.get_y(galley)
-            player = 1 if pos < 320 else 2
-            util_triggers.add_effect_change_own_unit(
-                rts.begin, 3, player, util_units.get_id(galley))
-            uid = util_units.get_id(galley)
-            change_pts_name = f'{prefix} P{player} loses Galley ({uid})'
-            change_pts = self._add_trigger(change_pts_name)
-            change_pts.enabled = False
-            self._add_activate(rts.names.begin, change_pts_name)
-            util_triggers.add_cond_hp0(change_pts, uid)
-            if player == 1:
-                self._add_effect_p2_score(change_pts, 10)
-                self._add_deactivate(rts.names.p1_wins, change_pts_name)
-            else:
-                self._add_effect_p1_score(change_pts, 10)
-                self._add_deactivate(rts.names.p2_wins, change_pts_name)
+        player_galleys = {
+            1: umgr.get_units_in_area(80.0, 160.0, 160.0, 240.0,
+                                      players=[Player.ONE]),
+            2: umgr.get_units_in_area(80.0, 160.0, 160.0, 240.0,
+                                      players=[Player.TWO]),
+        }
+        for p, galleys in player_galleys.items():
+            for galley in galleys:
+                uid = galley.reference_id
+                galley.unit_id = UCONST_INVISIBLE_OBJECT
 
-            util_triggers.add_effect_remove_obj(rts.cleanup, uid, player)
+                replace = rts.init.add_effect(effects.replace_object)
+                replace.number_of_units_selected = 1
+                replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
+                replace.player_source = p
+                replace.player_target = p
+                replace.object_list_unit_id_2 = units.galley
+                replace.selected_object_id = uid
+                util_triggers.add_effect_change_own_unit(rts.init, p, 0, uid)
+                util_triggers.add_effect_change_own_unit(rts.begin, 0, p, uid)
+
+                change_pts_name = f'{prefix} P{p} loses Galley ({uid})'
+                change_pts = self._add_trigger(change_pts_name)
+                change_pts.enabled = False
+                self._add_activate(rts.names.begin, change_pts_name)
+                util_triggers.add_cond_hp0(change_pts, uid)
+                if p == 1:
+                    self._add_effect_p2_score(change_pts, 10)
+                    self._add_deactivate(rts.names.p1_wins, change_pts_name)
+                else:
+                    self._add_effect_p1_score(change_pts, 10)
+                    self._add_deactivate(rts.names.p2_wins, change_pts_name)
+
+                util_triggers.add_effect_remove_obj(rts.cleanup, uid, p)
 
         self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
         self._add_deactivate(rts.names.p2_wins, rts.names.p1_wins)
@@ -3200,10 +3215,10 @@ def scratch(args): # pylint: disable=unused-argument
     # scratch_path = 'scratch.aoe2scenario'
     scn = AoE2Scenario(SCENARIO_TEMPLATE)
     umgr = scn.object_manager.unit_manager
-    unit_array = umgr.get_units_in_area(x1=160.0, y1=160.0, x2=240.0, y2=240.0,
-                                        players=[Player.THREE])
+    unit_array = umgr.get_units_in_area(x1=0.0, y1=0.0, x2=240.0, y2=240.0,
+                                        players=[Player.ONE, Player.TWO])
     for u in unit_array:
-        if u.unit_id == FLAG_A_UCONST:
+        if u.unit_id == units.galley:
             uid = u.reference_id
             x = u.x
             y = u.y
