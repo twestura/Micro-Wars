@@ -120,6 +120,8 @@ INITIAL_VARIABLES = [
     ('p2-battlefield-points', 0),
     ('p1-most-relics', 0),
     ('p2-most-relics', 0),
+    ('p1-castle-destroyed', 0),
+    ('p2-castle-destroyed', 0),
     ('p1-king-killed', 0),
     ('p2-king-killed', 0)
 ]
@@ -379,14 +381,6 @@ DC_STONE = 1300
 
 # Unit constant of a Castle.
 CASTLE_UCONST = 82
-
-
-# Unit ID for Player 1's Castle in the Castle Siege minigame.
-CS_P1_CASTLE_ID = 813
-
-
-# Unit ID for Player 2's Castle in the Castle Siege minigame.
-CS_P2_CASTLE_ID = 830
 
 
 # Unit ID for the flag/king of Player 1 in the Regicide game.
@@ -1564,7 +1558,10 @@ class ScnData:
         obj_cs_p1.display_on_screen = True
         obj_cs_p1.description_order = 49
         obj_cs_p1.mute_objectives = True
-        util_triggers.add_cond_hp0(obj_cs_p1, CS_P1_CASTLE_ID)
+        castle1_destroyed = obj_cs_p1.add_condition(conditions.variable_value)
+        castle1_destroyed.amount_or_quantity = 1
+        castle1_destroyed.variable = self._var_ids['p1-castle-destroyed']
+        castle1_destroyed.comparison = VarValComp.equal.value
 
         obj_cs_p2_name = f'[O] Castle Siege Player 2 Castle Destroyed'
         self._round_objectives[index].append(obj_cs_p2_name)
@@ -1576,7 +1573,10 @@ class ScnData:
         obj_cs_p2.display_on_screen = True
         obj_cs_p2.description_order = 48
         obj_cs_p2.mute_objectives = True
-        util_triggers.add_cond_hp0(obj_cs_p2, CS_P2_CASTLE_ID)
+        castle2_destroyed = obj_cs_p2.add_condition(conditions.variable_value)
+        castle2_destroyed.amount_or_quantity = 1
+        castle2_destroyed.variable = self._var_ids['p2-castle-destroyed']
+        castle2_destroyed.comparison = VarValComp.equal.value
 
     def _add_regicide_objectives(self, index: int):
         """Adds the objectives for the Regicide minigame."""
@@ -2852,12 +2852,17 @@ class ScnData:
         p2_loses_castle_name = f'{prefix} Player 2 Loses Castle'
         p2_loses_army_name = f'{prefix} Player 2 Loses Army'
 
+        # TODO don't hard code castle ids
+        # TODO replace player 3 with p1, p2, and gaia
+
         util_triggers.add_effect_modify_res(
             rts.init, 650, util_triggers.ACC_ATTR_STONE)
 
+        castle_ids = dict()
+
         # Begin changes ownership
         p3_units = util_units.get_units_array(self._scn, 3)
-        cs_units = util_units.units_in_area(p3_units, 80.0, 0, 160.0, 80.0)
+        cs_units = util_units.units_in_area(p3_units, 80.0, 0.0, 160.0, 80.0)
         unit_player_pairs = []
         for unit in cs_units:
             pos = util_units.get_x(unit) + util_units.get_y(unit)
@@ -2865,12 +2870,19 @@ class ScnData:
             uid = util_units.get_id(unit)
             util_triggers.add_effect_change_own_unit(rts.begin, 3, target, uid)
             unit_player_pairs.append((uid, target))
+            if unit.unit_id == buildings.castle:
+                castle_ids[target] = uid
 
         # p2 loses castle
         p2_loses_castle = self._add_trigger(p2_loses_castle_name)
         p2_loses_castle.enabled = False
+        p2_castle_var = p2_loses_castle.add_effect(effects.change_variable)
+        p2_castle_var.quantity = 1
+        p2_castle_var.operation = ChangeVarOp.set_op.value
+        p2_castle_var.from_variable = self._var_ids['p2-castle-destroyed']
+        p2_castle_var.message = 'p2-castle-destroyed'
         self._add_activate(rts.names.begin, p2_loses_castle_name)
-        util_triggers.add_cond_hp0(p2_loses_castle, CS_P2_CASTLE_ID)
+        util_triggers.add_cond_hp0(p2_loses_castle, castle_ids[2])
         self._add_activate(p2_loses_castle_name, rts.names.p1_wins)
         self._add_deactivate(p2_loses_castle_name, p2_loses_army_name)
         self._add_deactivate(p2_loses_castle_name, p1_loses_castle_name)
@@ -2893,8 +2905,13 @@ class ScnData:
         # p1 loses castle
         p1_loses_castle = self._add_trigger(p1_loses_castle_name)
         p1_loses_castle.enabled = False
+        p1_castle_var = p1_loses_castle.add_effect(effects.change_variable)
+        p1_castle_var.quantity = 1
+        p1_castle_var.operation = ChangeVarOp.set_op.value
+        p1_castle_var.from_variable = self._var_ids['p1-castle-destroyed']
+        p1_castle_var.message = 'p1-castle-destroyed'
         self._add_activate(rts.names.begin, p1_loses_castle_name)
-        util_triggers.add_cond_hp0(p1_loses_castle, CS_P1_CASTLE_ID)
+        util_triggers.add_cond_hp0(p1_loses_castle, castle_ids[1])
         self._add_activate(p1_loses_castle_name, rts.names.p2_wins)
         self._add_deactivate(p1_loses_castle_name, p1_loses_army_name)
         self._add_deactivate(p1_loses_castle_name, p2_loses_castle_name)
