@@ -339,6 +339,15 @@ UCONST_RELIC = 285
 UCONST_KING = 434
 
 
+# Set of all unit constants that represent Villagers.
+UCONST_VILS = {
+    units.villager_female, units.villager_male,
+    units.builder, units.repairer,
+    units.lumberjack, units.stone_miner, units.gold_miner,
+    units.farmer, units.hunter, units.forager, units.shepherd, units.fisherman
+}
+
+
 # Positions of the Relics in the Capture the Relic minigame.
 RELIC_POSITIONS = {(28, 125), (35, 132), (48, 112)}
 
@@ -383,6 +392,10 @@ DC_STONE = 1300
 CASTLE_UCONST = 82
 
 
+# The number of Hit Points of an Imperial Age Byzantine Castle with Hoardings.
+CASTLE_HP_BYZ_HOARDINGS = 7454
+
+
 # Unit ID for the flag/king of Player 1 in the Regicide game.
 REGICIDE_KING_ID_P1 = 52842
 
@@ -399,7 +412,7 @@ MINIGAME_CENTERS = {
     'Xbow Timer': (40, 200),
     'Capture the Relic': (40, 120),
     'DauT Castle': (36, 36),
-    'Castle Siege': (120, 40),
+    'Castle Siege': (120, 39),
     'Regicide': (200, 40),
 }
 
@@ -717,6 +730,7 @@ class ScnData:
         Modifies the internal scenario file to support the changes
         for Micro Wars!
         """
+        self._clear_unused_units()
         self._name_variables()
         self._add_ai_triggers()
         self._add_initial_triggers()
@@ -918,6 +932,68 @@ class ScnData:
             event_techs = e.techs
         for tech in event_techs:
             self._add_effect_research_tech(trigger, tech)
+
+    def _clear_unused_units(self) -> None:
+        """
+        Removes units from minigames that are not included in the events.
+
+        Currently this method turns these units into invisible objects.
+        A future implementation actually may remove the units.
+        """
+        mgs = {e.name for e in self._events if isinstance(e, Minigame)}
+        umgr = self._scn.object_manager.unit_manager
+        overall_units = []
+        for p in (Player.GAIA, Player.ONE, Player.TWO):
+            if 'Steal the Bacon' not in mgs:
+                overall_units.extend(
+                    (p, unit)
+                    for unit in umgr.get_units_in_area(
+                        160.0, 80.0, 240.0, 160.0, players=[p])
+                    if unit.unit_id != UCONST_INVISIBLE_OBJECT)
+            if 'Tower Battlefield' not in mgs:
+                overall_units.extend(
+                    (p, unit)
+                    for unit in umgr.get_units_in_area(
+                        160.0, 160.0, 240.0, 240.0, players=[p])
+                    if unit.unit_id != UCONST_INVISIBLE_OBJECT)
+            if 'Galley Micro' not in mgs:
+                overall_units.extend(
+                    (p, unit)
+                    for unit in umgr.get_units_in_area(
+                        80.0, 160.0, 160.0, 240.0, players=[p])
+                    if unit.unit_id != UCONST_INVISIBLE_OBJECT)
+            if 'Xbow Timer' not in mgs:
+                overall_units.extend(
+                    (p, unit)
+                    for unit in umgr.get_units_in_area(
+                        0.0, 160.0, 80.0, 240.0, players=[p])
+                    if unit.unit_id != UCONST_INVISIBLE_OBJECT)
+            if 'Capture the Relic' not in mgs:
+                overall_units.extend(
+                    (p, unit)
+                    for unit in umgr.get_units_in_area(
+                        0.0, 80.0, 80.0, 160.0, players=[p])
+                    if unit.unit_id != UCONST_INVISIBLE_OBJECT)
+            if 'DauT Castle' not in mgs:
+                overall_units.extend(
+                    (p, unit)
+                    for unit in umgr.get_units_in_area(
+                        0.0, 0.0, 80.0, 80.0, players=[p])
+                    if unit.unit_id != UCONST_INVISIBLE_OBJECT)
+            if 'Castle Siege' not in mgs:
+                overall_units.extend(
+                    (p, unit)
+                    for unit in umgr.get_units_in_area(
+                        80.0, 0.0, 160.0, 80.0, players=[p])
+                    if unit.unit_id != UCONST_INVISIBLE_OBJECT)
+            if 'Regicide' not in mgs:
+                overall_units.extend(
+                    (p, unit)
+                    for unit in umgr.get_units_in_area(
+                        160.0, 0.0, 240.0, 80.0, players=[p])
+                    if unit.unit_id != UCONST_INVISIBLE_OBJECT)
+        for p, unit in overall_units:
+            util_units.remove(self._scn, unit, p)
 
     def _name_variables(self) -> None:
         """Sets the names for trigger variables in the scenario."""
@@ -2130,13 +2206,10 @@ class ScnData:
             change_to_3.player_target = 0
             util_triggers.set_effect_area(change_to_3, 160, 160, 238, 238)
         # Removes Villagers so they stop gathering resources.
-        for uid in (units.villager_female, units.villager_male,
-                    units.lumberjack, units.stone_miner, units.gold_miner,
-                    units.farmer, units.hunter, units.builder, units.forager,
-                    units.shepherd, units.repairer, units.fisherman):
+        for uconst in UCONST_VILS:
             remove_vils = rts.cleanup.add_effect(effects.remove_object)
             remove_vils.player_source = 0
-            remove_vils.object_list_unit_id = uid
+            remove_vils.object_list_unit_id = uconst
             util_triggers.set_effect_area(remove_vils, 160, 160, 238, 238)
 
         for res in (util_triggers.ACC_ATTR_WOOD, util_triggers.ACC_ATTR_FOOD,
@@ -2851,27 +2924,67 @@ class ScnData:
         p1_loses_army_name = f'{prefix} Player 1 Loses Army'
         p2_loses_castle_name = f'{prefix} Player 2 Loses Castle'
         p2_loses_army_name = f'{prefix} Player 2 Loses Army'
-
-        # TODO don't hard code castle ids
-        # TODO replace player 3 with p1, p2, and gaia
+        umgr = self._scn.object_manager.unit_manager
 
         util_triggers.add_effect_modify_res(
             rts.init, 650, util_triggers.ACC_ATTR_STONE)
 
-        castle_ids = dict()
+        castles = dict()
+        player_units = {Player.ONE: [], Player.TWO: []}
 
         # Begin changes ownership
-        p3_units = util_units.get_units_array(self._scn, 3)
-        cs_units = util_units.units_in_area(p3_units, 80.0, 0.0, 160.0, 80.0)
-        unit_player_pairs = []
-        for unit in cs_units:
-            pos = util_units.get_x(unit) + util_units.get_y(unit)
-            target = 1 if pos < 160.0 else 2
-            uid = util_units.get_id(unit)
-            util_triggers.add_effect_change_own_unit(rts.begin, 3, target, uid)
-            unit_player_pairs.append((uid, target))
-            if unit.unit_id == buildings.castle:
-                castle_ids[target] = uid
+        for p in (Player.ONE, Player.TWO):
+            ulst = umgr.get_units_in_area(80.0, 0.0, 160.0, 80.0, players=[p])
+            for unit in ulst:
+                if unit.unit_id == buildings.castle:
+                    castles[p] = unit
+                else:
+                    player_units[p].append(unit)
+        for p in (Player.ONE, Player.TWO):
+            castles[p] = util_units.change_player(
+                self._scn, castles[p], p, Player.GAIA)
+
+            # Gives Castles the same HP as Byzantine Imperial Casteles with
+            # Hoardings.
+            set_castle_hp = rts.init.add_effect(effects.change_object_hp)
+            set_castle_hp.quantity = CASTLE_HP_BYZ_HOARDINGS
+            set_castle_hp.player_source = Player.GAIA.value
+            set_castle_hp.selected_object_id = castles[p].reference_id
+            set_castle_hp.number_of_units_selected = 1
+            set_castle_hp.object_list_unit_id = buildings.castle
+            set_castle_hp.operation = ChangeVarOp.set_op.value
+
+            util_triggers.add_effect_change_own_unit(
+                rts.begin, Player.GAIA.value, p.value, castles[p].reference_id)
+
+        for p, ulst in player_units.items():
+            for unit in ulst:
+                util_units.remove(self._scn, unit, p)
+
+                create = rts.init.add_effect(effects.create_object)
+                create.object_list_unit_id = unit.unit_id
+                create.player_source = p.value
+                create.facet = util_units.rad_to_facet(unit.rotation)
+                create.location_x = int(unit.x)
+                create.location_y = int(unit.y)
+
+                to0 = rts.init.add_effect(effects.change_ownership)
+                to0.player_source = p.value
+                to0.player_target = Player.GAIA.value
+                to0.object_list_unit_id = unit.unit_id
+                to0.area_1_x = int(unit.x)
+                to0.area_1_y = int(unit.y)
+                to0.area_2_x = int(unit.x)
+                to0.area_2_y = int(unit.y)
+
+                top = rts.init.add_effect(effects.change_ownership)
+                top.player_source = Player.GAIA.value
+                top.player_target = p.value
+                top.object_list_unit_id = unit.unit_id
+                top.area_1_x = int(unit.x)
+                top.area_1_y = int(unit.y)
+                top.area_2_x = int(unit.x)
+                top.area_2_y = int(unit.y)
 
         # p2 loses castle
         p2_loses_castle = self._add_trigger(p2_loses_castle_name)
@@ -2882,7 +2995,8 @@ class ScnData:
         p2_castle_var.from_variable = self._var_ids['p2-castle-destroyed']
         p2_castle_var.message = 'p2-castle-destroyed'
         self._add_activate(rts.names.begin, p2_loses_castle_name)
-        util_triggers.add_cond_hp0(p2_loses_castle, castle_ids[2])
+        util_triggers.add_cond_hp0(p2_loses_castle,
+                                   castles[Player.TWO].reference_id)
         self._add_activate(p2_loses_castle_name, rts.names.p1_wins)
         self._add_deactivate(p2_loses_castle_name, p2_loses_army_name)
         self._add_deactivate(p2_loses_castle_name, p1_loses_castle_name)
@@ -2911,7 +3025,8 @@ class ScnData:
         p1_castle_var.from_variable = self._var_ids['p1-castle-destroyed']
         p1_castle_var.message = 'p1-castle-destroyed'
         self._add_activate(rts.names.begin, p1_loses_castle_name)
-        util_triggers.add_cond_hp0(p1_loses_castle, castle_ids[1])
+        util_triggers.add_cond_hp0(p1_loses_castle,
+                                   castles[Player.ONE].reference_id)
         self._add_activate(p1_loses_castle_name, rts.names.p2_wins)
         self._add_deactivate(p1_loses_castle_name, p1_loses_army_name)
         self._add_deactivate(p1_loses_castle_name, p2_loses_castle_name)
@@ -2932,13 +3047,11 @@ class ScnData:
         self._add_effect_p2_score(rts.p2_wins, event.MAX_POINTS)
 
         # Cleanup removes units from player control.
-        for uid, player_source in unit_player_pairs:
-            change_from_player = rts.cleanup.add_effect(
-                effects.change_ownership)
-            change_from_player.number_of_units_selected = 1
-            change_from_player.player_source = player_source
-            change_from_player.player_target = 0
-            change_from_player.selected_object_id = uid
+        for p in (1, 2):
+            change_to_0 = rts.cleanup.add_effect(effects.change_ownership)
+            change_to_0.player_source = p
+            change_to_0.player_target = 0
+            util_triggers.set_effect_area(change_to_0, 80, 0, 159, 79)
 
         # Removes stone after round is over
         util_triggers.add_effect_modify_res(
@@ -3232,14 +3345,19 @@ def scratch(args): # pylint: disable=unused-argument
     # scratch_path = 'scratch.aoe2scenario'
     scn = AoE2Scenario(SCENARIO_TEMPLATE)
     umgr = scn.object_manager.unit_manager
-    unit_array = umgr.get_units_in_area(x1=0.0, y1=0.0, x2=240.0, y2=240.0,
-                                        players=[Player.ONE, Player.TWO])
-    for u in unit_array:
-        if u.unit_id == units.galley:
-            uid = u.reference_id
-            x = u.x
-            y = u.y
-            print(f'{uid} - ({x}, {y})')
+    for k, ulst in enumerate(umgr.units):
+        print(f'k: {k}')
+        for unit in ulst:
+            print(f'{unit.unit_id}: ({unit.x}, {unit.y})')
+    print(f'num_lists: {len(umgr.units)}')
+    # unit_array = umgr.get_units_in_area(x1=0.0, y1=0.0, x2=240.0, y2=240.0,
+    #                                     players=[Player.ONE, Player.TWO])
+    # for u in unit_array:
+    #     if u.unit_id == units.galley:
+    #         uid = u.reference_id
+    #         x = u.x
+    #         y = u.y
+    #         print(f'{uid} - ({x}, {y})')
 
 
 def main():

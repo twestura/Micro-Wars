@@ -43,26 +43,14 @@ def copy_unit(scn: AoE2Scenario, unit: UnitStruct, player: int) -> UnitStruct:
     return u
 
 
-def remove(scn: AoE2Scenario, uid: int, p: Player) -> None:
+def remove(scn: AoE2Scenario, unit: UnitStruct, p: Player) -> None:
     """
     Removes the unit with reference id uid from the given player in the
     scenario.
 
     Raises a ValueError if the unit does not exist.
     """
-    player_units = scn._parsed_data['UnitsPiece'].retrievers[4].data[p.value] # pylint: disable=protected-access
-    index = None
-    for k, unit in enumerate(player_units.retrievers[1].data):
-        if unit.retrievers[3].data == uid:
-            index = k
-            break
-    if index is None:
-        raise ValueError(f'Player {p} has no unit {uid}.')
-
-    print(f'removing {uid}')
-    player_units.retrievers[0].data -= 1 # Decreases the array length.
-    del player_units.retrievers[1].data[index] # Removes unit from the array.
-
+    scn.object_manager.unit_manager.get_player_units(p).remove(unit)
 
 
 def get_units_array(scn: AoE2Scenario, player: int) -> List[UnitStruct]:
@@ -85,30 +73,28 @@ def units_in_area(unit_array: List[UnitStruct],
             if x1 <= get_x(unit) <= x2 and y1 <= get_y(unit) <= y2]
 
 
-def change_player(scenario: AoE2Scenario,
-                  unit_index: int, i: int, j: int) -> None:
+def change_player(scn: AoE2Scenario, unit: UnitStruct,
+                  pi: Player, pj: Player) -> None:
     """
-    Moves a unit from control of player i to player j.
-    unit_index is the original index of the unit to move in the units array
-    of player i.
+    Removes a unit from control of player pi and adds an equivalent unit to
+    the control of player pj.
+    Returns the unit that is added to pj.
+    The reference id of the removed unit is maintained in the added unit.
 
-    Raises a ValueError if i == j.
+    Raises a ValueError if pi == pj or if unit does not belong to player pi.
     """
-    if i == j:
-        raise ValueError(f'Player numbers must be different, both are {i}.')
-
-    # The a PlayerUnits struct has the unit count and the array of units.
-    pi_units = scenario.parsed_data['UnitsPiece'].retrievers[4].data[i]
-    pj_units = scenario.parsed_data['UnitsPiece'].retrievers[4].data[j]
-
-    # Changes the array lengths.
-    pi_units.retrievers[0].data -= 1
-    pj_units.retrievers[0].data += 1
-
-    # Transfers the unit.
-    unit = pi_units.retrievers[1].data[unit_index]
-    del pi_units.retrievers[1].data[unit_index]
-    pj_units.retrievers[1].data.append(unit)
+    if pi == pj:
+        raise ValueError(f'Player numbers must be different, both are {pi}.')
+    remove(scn, unit, pi)
+    return scn.object_manager.unit_manager.add_unit(
+        player=pj,
+        x=unit.x,
+        y=unit.y,
+        z=unit.z,
+        rotation=unit.rotation,
+        reference_id=unit.reference_id,
+        unit_id=unit.unit_id
+    )
 
 
 def get_x(unit: UnitStruct) -> float:
