@@ -520,6 +520,7 @@ class _RoundTriggers:
         e = self._scn._events[index]
         prev = self._scn._events[index - 1]
         if isinstance(e, Fight) and (index == 1 or isinstance(prev, Minigame)):
+            # TODO adding the map revealers needs to add effects to a trigger
             self._scn._add_activate(self.names.init, REVEALER_FIGHT_CREATE_NAME)
         elif isinstance(self._scn._events[index], Minigame):
             self._scn._add_activate(self.names.init,
@@ -2393,17 +2394,26 @@ class ScnData:
 
         # Round 1
         for unit in archers:
-            archer = util_units.copy_unit(self._scn, unit, 3)
+            archer = util_units.copy_unit(self._scn, unit, Player.ONE.value)
             archer.unit_id = UCONST_INVISIBLE_OBJECT
             uid = util_units.get_id(archer)
+
+            util_triggers.add_effect_teleport(
+                rts.init, uid, int(archer.x), int(archer.y), Player.ONE.value)
+            archer.x, archer.y = 237, 0
             replace = rts.init.add_effect(effects.replace_object)
             replace.number_of_units_selected = 1
             replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
-            replace.player_source = 3
-            replace.player_target = 3
+            replace.player_source = Player.ONE.value
+            replace.player_target = Player.ONE.value
             replace.object_list_unit_id_2 = UCONST_ARCHER
             replace.selected_object_id = uid
-            util_triggers.add_effect_change_own_unit(rts.begin, 3, 1, uid)
+            util_triggers.add_effect_change_own_unit(
+                rts.init, Player.ONE.value, Player.GAIA.value, uid)
+
+            util_triggers.add_effect_change_own_unit(
+                rts.begin, Player.GAIA.value, Player.ONE.value, uid)
+
             change_pts_name = f'{prefix} P1 loses Archer ({uid})'
             change_pts = self._add_trigger(change_pts_name)
             change_pts.enabled = False
@@ -2413,29 +2423,38 @@ class ScnData:
             self._add_effect_p2_score(change_pts, 1)
 
         for unit in skirms:
-            skirm = util_units.copy_unit(self._scn, unit, 3)
+            skirm = util_units.copy_unit(self._scn, unit, Player.TWO.value)
             skirm.unit_id = UCONST_INVISIBLE_OBJECT
             uid = util_units.get_id(skirm)
+
+            util_triggers.add_effect_teleport(
+                rts.init, uid, int(skirm.x), int(skirm.y), Player.TWO.value)
+            skirm.x, skirm.y = 239, 2
             replace = rts.init.add_effect(effects.replace_object)
             replace.number_of_units_selected = 1
             replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
-            replace.player_source = 3
-            replace.player_target = 3
+            replace.player_source = Player.TWO.value
+            replace.player_target = Player.TWO.value
             replace.object_list_unit_id_2 = UCONST_SKIRM
             replace.selected_object_id = uid
             skirm_pa = rts.init.add_effect(effects.change_object_armor)
             skirm_pa.aa_quantity = 1
             skirm_pa.aa_armor_or_attack_type = 3
             skirm_pa.number_of_units_selected = 1
-            skirm_pa.player_source = 3
+            skirm_pa.player_source = Player.TWO.value
             skirm_pa.selected_object_id = uid
             skirm_ma = rts.init.add_effect(effects.change_object_armor)
             skirm_ma.aa_quantity = 1
             skirm_ma.aa_armor_or_attack_type = 4
             skirm_ma.number_of_units_selected = 1
-            skirm_ma.player_source = 3
+            skirm_ma.player_source = Player.TWO.value
             skirm_ma.selected_object_id = uid
-            util_triggers.add_effect_change_own_unit(rts.begin, 3, 2, uid)
+            util_triggers.add_effect_change_own_unit(
+                rts.init, Player.TWO.value, Player.GAIA.value, uid)
+
+            util_triggers.add_effect_change_own_unit(
+                rts.begin, Player.GAIA.value, Player.TWO.value, uid)
+
             change_pts_name = f'{prefix} P2 loses Skirmisher ({uid})'
             change_pts = self._add_trigger(change_pts_name)
             change_pts.enabled = False
@@ -2446,17 +2465,26 @@ class ScnData:
 
         # Round 2
         for unit in archers:
-            archer = util_units.copy_unit(self._scn, unit, 3)
+            archer = util_units.copy_unit(self._scn, unit, Player.TWO.value)
             archer.unit_id = UCONST_INVISIBLE_OBJECT
             uid = util_units.get_id(archer)
+
+            util_triggers.add_effect_teleport(
+                init2, uid, int(archer.x), int(archer.y), Player.TWO.value)
+            skirm.x, skirm.y = 239, 2
             replace = init2.add_effect(effects.replace_object)
             replace.number_of_units_selected = 1
             replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
-            replace.player_source = 3
-            replace.player_target = 3
+            replace.player_source = Player.TWO.value
+            replace.player_target = Player.TWO.value
             replace.object_list_unit_id_2 = UCONST_ARCHER
             replace.selected_object_id = uid
-            util_triggers.add_effect_change_own_unit(begin2, 3, 2, uid)
+            util_triggers.add_effect_change_own_unit(
+                init2, Player.TWO.value, Player.GAIA.value, uid)
+
+            util_triggers.add_effect_change_own_unit(
+                begin2, Player.GAIA.value, Player.TWO.value, uid)
+
             change_pts_name = f'{prefix} P2 loses Archer ({uid})'
             change_pts = self._add_trigger(change_pts_name)
             change_pts.enabled = False
@@ -2466,29 +2494,38 @@ class ScnData:
             self._add_effect_p1_score(change_pts, 1)
 
         for unit in skirms:
-            skirm = util_units.copy_unit(self._scn, unit, 3)
+            skirm = util_units.copy_unit(self._scn, unit, Player.ONE.value)
             skirm.unit_id = UCONST_INVISIBLE_OBJECT
             uid = util_units.get_id(skirm)
+
+            util_triggers.add_effect_teleport(
+                init2, uid, int(skirm.x), int(skirm.y), Player.ONE.value)
+            skirm.x, skirm.y = 237, 0
             replace = init2.add_effect(effects.replace_object)
             replace.number_of_units_selected = 1
             replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
-            replace.player_source = 3
-            replace.player_target = 3
+            replace.player_source = Player.ONE.value
+            replace.player_target = Player.ONE.value
             replace.object_list_unit_id_2 = UCONST_SKIRM
             replace.selected_object_id = uid
             skirm_pa = init2.add_effect(effects.change_object_armor)
             skirm_pa.aa_quantity = 1
             skirm_pa.aa_armor_or_attack_type = 3
             skirm_pa.number_of_units_selected = 1
-            skirm_pa.player_source = 3
+            skirm_pa.player_source = Player.ONE.value
             skirm_pa.selected_object_id = uid
             skirm_ma = init2.add_effect(effects.change_object_armor)
             skirm_ma.aa_quantity = 1
             skirm_ma.aa_armor_or_attack_type = 4
             skirm_ma.number_of_units_selected = 1
-            skirm_ma.player_source = 3
+            skirm_ma.player_source = Player.ONE.value
             skirm_ma.selected_object_id = uid
-            util_triggers.add_effect_change_own_unit(begin2, 3, 1, uid)
+            util_triggers.add_effect_change_own_unit(
+                init2, Player.ONE.value, Player.GAIA.value, uid)
+
+            util_triggers.add_effect_change_own_unit(
+                begin2, Player.GAIA.value, Player.ONE.value, uid)
+
             change_pts_name = f'{prefix} P1 loses Skirmisher ({uid})'
             change_pts = self._add_trigger(change_pts_name)
             change_pts.enabled = False
@@ -2967,40 +3004,42 @@ class ScnData:
             set_castle_hp.object_list_unit_id = buildings.castle
             set_castle_hp.operation = ChangeVarOp.set_op.value
 
-            # TODO ensure castle remains gaia between init and begin
+            # Ensures Castles remain Gaia between init and begin.
+            # TODO ensure this works along with Map Revealers.
+            util_triggers.add_effect_change_own_unit(
+                rts.init, Player.GAIA.value, p.value, castles[p].reference_id)
+            util_triggers.add_effect_change_own_unit(
+                rts.init, p.value, Player.GAIA.value, castles[p].reference_id)
+
             util_triggers.add_effect_change_own_unit(
                 rts.begin, Player.GAIA.value, p.value, castles[p].reference_id)
 
         for p, ulst in player_units.items():
             for unit in ulst:
                 util_units.remove(self._scn, unit, p)
+                x, y = int(unit.x), int(unit.y)
 
                 create = rts.init.add_effect(effects.create_object)
                 create.object_list_unit_id = unit.unit_id
                 create.player_source = p.value
                 create.facet = util_units.rad_to_facet(unit.rotation)
-                create.location_x = int(unit.x)
-                create.location_y = int(unit.y)
+                create.location_x, create.location_y = x, y
 
                 to0 = rts.init.add_effect(effects.change_ownership)
                 to0.player_source = p.value
                 to0.player_target = Player.GAIA.value
                 to0.object_list_unit_id = unit.unit_id
-                to0.area_1_x = int(unit.x)
-                to0.area_1_y = int(unit.y)
-                to0.area_2_x = int(unit.x)
-                to0.area_2_y = int(unit.y)
+                to0.area_1_x, to0.area_1_y = x, y
+                to0.area_2_x, to0.area_2_y = x, y
 
                 top = rts.begin.add_effect(effects.change_ownership)
                 top.player_source = Player.GAIA.value
                 top.player_target = p.value
                 top.object_list_unit_id = unit.unit_id
-                top.area_1_x = int(unit.x)
-                top.area_1_y = int(unit.y)
-                top.area_2_x = int(unit.x)
-                top.area_2_y = int(unit.y)
+                top.area_1_x, top.area_1_y = x, y
+                top.area_2_x, top.area_2_y = x, y
 
-        # p2 loses castle
+        # P2 loses castle.
         p2_loses_castle = self._add_trigger(p2_loses_castle_name)
         p2_loses_castle.enabled = False
         p2_castle_var = p2_loses_castle.add_effect(effects.change_variable)
@@ -3016,7 +3055,7 @@ class ScnData:
         self._add_deactivate(p2_loses_castle_name, p1_loses_castle_name)
         self._add_deactivate(p2_loses_castle_name, p1_loses_army_name)
 
-        # p2 loses army
+        # P2 loses army.
         p2_loses_army = self._add_trigger(p2_loses_army_name)
         p2_loses_army.enabled = False
         self._add_activate(rts.names.begin, p2_loses_army_name)
@@ -3026,11 +3065,11 @@ class ScnData:
         self._add_deactivate(p2_loses_army_name, p1_loses_army_name)
         self._add_deactivate(p2_loses_army_name, p2_loses_castle_name)
 
-        # p1 wins
+        # P1 wins.
         rts.p1_wins.enabled = False
         self._add_effect_p1_score(rts.p1_wins, event.MAX_POINTS)
 
-        # p1 loses castle
+        # P1 loses castle.
         p1_loses_castle = self._add_trigger(p1_loses_castle_name)
         p1_loses_castle.enabled = False
         p1_castle_var = p1_loses_castle.add_effect(effects.change_variable)
@@ -3046,7 +3085,7 @@ class ScnData:
         self._add_deactivate(p1_loses_castle_name, p2_loses_castle_name)
         self._add_deactivate(p1_loses_castle_name, p2_loses_army_name)
 
-        # p1 loses army
+        # P1 loses army.
         p1_loses_army = self._add_trigger(p1_loses_army_name)
         p1_loses_army.enabled = False
         self._add_activate(rts.names.begin, p1_loses_army_name)
@@ -3056,7 +3095,7 @@ class ScnData:
         self._add_deactivate(p1_loses_army_name, p2_loses_army_name)
         self._add_deactivate(p1_loses_army_name, p1_loses_castle_name)
 
-        # p2 wins
+        # P2 wins
         rts.p2_wins.enabled = False
         self._add_effect_p2_score(rts.p2_wins, event.MAX_POINTS)
 
@@ -3067,7 +3106,7 @@ class ScnData:
             change_to_0.player_target = 0
             util_triggers.set_effect_area(change_to_0, 80, 0, 159, 79)
 
-        # Removes stone after round is over
+        # Removes stone after round is over.
         util_triggers.add_effect_modify_res(
             rts.cleanup, 0, util_triggers.ACC_ATTR_STONE)
 
