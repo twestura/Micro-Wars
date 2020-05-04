@@ -771,6 +771,54 @@ class ScnData:
         p3_food.player_source = 3
         p3_food.operation = ChangeVarOp.add.value
 
+    def _add_effect_score(self, trigger: TriggerObject, player: Player,
+                          pts: int) -> None:
+        """Adds effects to trigger to change the player's score by pts."""
+        if player == Player.ONE:
+            self._add_effect_p1_score(trigger, pts)
+        elif player == Player.TWO:
+            self._add_effect_p2_score(trigger, pts)
+        else:
+            raise ValueError(f'{player} is not Player 1 or Player 2.')
+
+    def _create_unit_sequence(self, p: Player, unit: UnitStruct,
+                              rts: _RoundTriggers) -> None:
+        """
+        Removes unit from player p and replaces it with a sequence of trigger
+        effects.
+
+        Adds create unit and change ownership effects to rts.init to create
+        the unit for the given player, then change it's ownership immediately
+        to the Gaia player. The ownership change is necessary, as the
+        Map Revealers would change the ownership of the unit were it first
+        created as Gaia.
+
+        Adds a change ownership effect to rts.begin to change the ownership of
+        the unit to player p.
+        """
+        util_units.remove(self._scn, unit, p)
+        x, y = int(unit.x), int(unit.y)
+
+        create = rts.init.add_effect(effects.create_object)
+        create.object_list_unit_id = unit.unit_id
+        create.player_source = p.value
+        create.facet = util_units.rad_to_facet(unit.rotation)
+        create.location_x, create.location_y = x, y
+
+        to0 = rts.init.add_effect(effects.change_ownership)
+        to0.player_source = p.value
+        to0.player_target = Player.GAIA.value
+        to0.object_list_unit_id = unit.unit_id
+        to0.area_1_x, to0.area_1_y = x, y
+        to0.area_2_x, to0.area_2_y = x, y
+
+        top = rts.begin.add_effect(effects.change_ownership)
+        top.player_source = Player.GAIA.value
+        top.player_target = p.value
+        top.object_list_unit_id = unit.unit_id
+        top.area_1_x, top.area_1_y = x, y
+        top.area_2_x, top.area_2_y = x, y
+
     def _add_effect_research_tech(self, trigger: TriggerObject,
                                   tech_name: str) -> None:
         """
@@ -2509,6 +2557,7 @@ class ScnData:
         """
         assert index
         rts = _RoundTriggers(self, index)
+        umgr = self._scn.object_manager.unit_manager
 
         prefix = f'[R{index}]'
 
@@ -2607,16 +2656,10 @@ class ScnData:
             create.location_x = int(util_units.get_x(unit)) - 19 + p2_pos[0] + 1
             create.location_y = int(util_units.get_y(unit)) - 29 + p2_pos[1]
 
-        # TODO replace these triggers with create -> gaia -> player sequence
-        change_own_p1 = rts.begin.add_effect(effects.change_ownership)
-        change_own_p1.player_source = 3
-        change_own_p1.player_target = 1
-        util_triggers.set_effect_area(change_own_p1, 0, 80, 39, 119)
-
-        change_own_p2 = rts.begin.add_effect(effects.change_ownership)
-        change_own_p2.player_source = 3
-        change_own_p2.player_target = 2
-        util_triggers.set_effect_area(change_own_p2, 40, 120, 79, 159)
+        for p in (Player.ONE, Player.TWO):
+            for unit in umgr.get_units_in_area(0.0, 80.0, 80.0, 160.0,
+                                               players=[p]):
+                self._create_unit_sequence(p, unit, rts)
 
         create_relics = self._add_trigger(create_relics_name)
         create_relics.enabled = False
@@ -2795,28 +2838,7 @@ class ScnData:
                                                players=[p]):
                 if unit.unit_id == FLAG_A_UCONST:
                     player_flags[p].add(unit)
-                util_units.remove(self._scn, unit, p)
-                x, y = int(unit.x), int(unit.y)
-
-                create = rts.init.add_effect(effects.create_object)
-                create.object_list_unit_id = unit.unit_id
-                create.player_source = p.value
-                create.facet = util_units.rad_to_facet(unit.rotation)
-                create.location_x, create.location_y = x, y
-
-                to0 = rts.init.add_effect(effects.change_ownership)
-                to0.player_source = p.value
-                to0.player_target = Player.GAIA.value
-                to0.object_list_unit_id = unit.unit_id
-                to0.area_1_x, to0.area_1_y = x, y
-                to0.area_2_x, to0.area_2_y = x, y
-
-                top = rts.begin.add_effect(effects.change_ownership)
-                top.player_source = Player.GAIA.value
-                top.player_target = p.value
-                top.object_list_unit_id = unit.unit_id
-                top.area_1_x, top.area_1_y = x, y
-                top.area_2_x, top.area_2_y = x, y
+                self._create_unit_sequence(p, unit, rts)
 
         flag_positions = [
             (flag.x, flag.y)
@@ -2929,28 +2951,7 @@ class ScnData:
         for p in (Player.ONE, Player.TWO):
             ulst = umgr.get_units_in_area(80.0, 0.0, 160.0, 80.0, players=[p])
             for unit in ulst:
-                util_units.remove(self._scn, unit, p)
-                x, y = int(unit.x), int(unit.y)
-
-                create = rts.init.add_effect(effects.create_object)
-                create.object_list_unit_id = unit.unit_id
-                create.player_source = p.value
-                create.facet = util_units.rad_to_facet(unit.rotation)
-                create.location_x, create.location_y = x, y
-
-                to0 = rts.init.add_effect(effects.change_ownership)
-                to0.player_source = p.value
-                to0.player_target = Player.GAIA.value
-                to0.object_list_unit_id = unit.unit_id
-                to0.area_1_x, to0.area_1_y = x, y
-                to0.area_2_x, to0.area_2_y = x, y
-
-                top = rts.begin.add_effect(effects.change_ownership)
-                top.player_source = Player.GAIA.value
-                top.player_target = p.value
-                top.object_list_unit_id = unit.unit_id
-                top.area_1_x, top.area_1_y = x, y
-                top.area_2_x, top.area_2_y = x, y
+                self._create_unit_sequence(p, unit, rts)
 
         # P2 loses castle.
         p2_loses_castle = self._add_trigger(p2_loses_castle_name)
@@ -3021,10 +3022,10 @@ class ScnData:
         self._add_effect_p2_score(rts.p2_wins, event.MAX_POINTS)
 
         # Cleanup removes units from player control.
-        for p in (1, 2):
+        for p in (Player.ONE, Player.TWO):
             change_to_0 = rts.cleanup.add_effect(effects.change_ownership)
-            change_to_0.player_source = p
-            change_to_0.player_target = 0
+            change_to_0.player_source = p.value
+            change_to_0.player_target = Player.GAIA.value
             util_triggers.set_effect_area(change_to_0, 80, 0, 159, 79)
 
         # Removes stone after round is over.
