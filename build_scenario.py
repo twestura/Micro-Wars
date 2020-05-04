@@ -205,45 +205,6 @@ REVEALER_FIGHT_CREATE_NAME = '[I] Create Fight Map Revealers'
 REVEALER_HIDE_NAME = '[I] Hide Map Revealers'
 
 
-# Flag A reference ids for Player 1 in Steal the Bacon.
-BOAR_FLAGS_1 = [39843, 39845, 39847, 39849, 39851]
-
-
-# Flag B reference ids for Player 2 in Steal the Bacon.
-BOAR_FLAGS_2 = [39842, 39844, 39846, 39848, 39850]
-
-
-# Maps each flag id to its x and y tile coordinates.
-BOAR_FLAG_POS = {
-    39842: (187, 106),
-    39843: (198, 103),
-    39844: (209, 104),
-    39845: (217, 112),
-    39846: (218, 123),
-    39847: (215, 134),
-    39848: (204, 137),
-    39849: (193, 136),
-    39850: (185, 128),
-    39851: (184, 117),
-}
-
-
-# Unit reference id for Player 1's starting Scout in Steal the Bacon.
-BOAR_SC_1 = 39910
-
-
-# Position of Player 1's starting Scout in Steal the Bacon.
-BOAR_SC_1_POS = (185, 104)
-
-
-# Position of Player 2's starting Scout in Steal the Bacon.
-BOAR_SC_2_POS = (217, 136)
-
-
-# Unit reference id for Player 2's starting Scout in Steal the Bacon.
-BOAR_SC_2 = 39911
-
-
 # Number of Points scored for capturing a Boar in Steal the Bacon.
 BOAR_POINTS = 20
 
@@ -1861,6 +1822,8 @@ class ScnData:
         assert index
         rts = _RoundTriggers(self, index)
         prefix = f'[R{index}]'
+        boar_dead_name = f'{prefix} All Boar are Dead'
+
         umgr = self._scn.object_manager.unit_manager
 
         boar_units = {
@@ -1869,27 +1832,55 @@ class ScnData:
                 x1=160.0, y1=80.0, x2=240.0, y2=160.0, players=[Player.GAIA])
             if unit.unit_id == UCONST_BOAR
         }
-        boar_dead_name = f'{prefix} All Boar are Dead'
+
+        scouts = dict()
+        player_flags = {Player.ONE: set(), Player.TWO: set()}
+
+        for p in (Player.ONE, Player.TWO):
+            for unit in umgr.get_units_in_area(160.0, 80.0, 240.0, 160.0,
+                                               players=[p]):
+                if unit.unit_id == units.scout_cavalry:
+                    scouts[p] = unit
+                elif unit.unit_id == FLAG_A_UCONST:
+                    player_flags[p].add(unit)
+                else:
+                    raise AssertionError(f'unit is not handled {unit}.')
 
         self._add_activate(rts.names.begin, rts.names.p1_wins)
         self._add_activate(rts.names.begin, rts.names.p2_wins)
         self._add_activate(rts.names.begin, boar_dead_name)
 
-        util_triggers.add_effect_change_own_unit(rts.begin, 3, 1, BOAR_SC_1)
-        util_triggers.add_effect_change_own_unit(rts.begin, 3, 2, BOAR_SC_2)
-        for flag in BOAR_FLAGS_1:
-            util_triggers.add_effect_change_own_unit(rts.begin, 3, 1, flag)
-        for flag in BOAR_FLAGS_2:
-            util_triggers.add_effect_change_own_unit(rts.begin, 3, 2, flag)
 
-        for player, pos in ((1, BOAR_SC_1_POS), (2, BOAR_SC_2_POS)):
-            scout_respawn1_name = f'{prefix} P{player} Scout Respawn 1'
-            scout_countdown_name = f'{prefix} P{player} Scout Countdown'
+        for p, scout in scouts.items():
+            util_units.remove(self._scn, scout, p)
+            x, y = int(scout.x), int(scout.y)
+            create = rts.init.add_effect(effects.create_object)
+            create.object_list_unit_id = units.scout_cavalry
+            create.player_source = p.value
+            create.facet = util_units.rad_to_facet(scout.rotation)
+            create.location_x, create.location_y = x, y
+
+            to_0 = rts.init.add_effect(effects.change_ownership)
+            to_0.player_source = p.value
+            to_0.player_target = Player.GAIA.value
+            to_0.object_list_unit_id = units.scout_cavalry
+            to_0.area_1_x, to_0.area_1_y = x, y
+            to_0.area_2_x, to_0.area_2_y = x, y
+
+            to_p = rts.begin.add_effect(effects.change_ownership)
+            to_p.player_source = Player.GAIA.value
+            to_p.player_target = p.value
+            to_p.object_list_unit_id = units.scout_cavalry
+            to_p.area_1_x, to_p.area_1_y = x, y
+            to_p.area_2_x, to_p.area_2_y = x, y
+
+            scout_respawn1_name = f'{prefix} P{p.value} Scout Respawn 1'
+            scout_countdown_name = f'{prefix} P{p.value} Scout Countdown'
             scout_respawn1 = self._add_trigger(scout_respawn1_name)
             scout_respawn1.enabled = False
             self._add_activate(rts.names.begin, scout_respawn1_name)
             scout_respawn1.looping = True
-            util_triggers.add_cond_pop0(scout_respawn1, player)
+            util_triggers.add_cond_pop0(scout_respawn1, p.value)
             self._add_deactivate(scout_respawn1_name, scout_respawn1_name)
             self._add_activate(scout_respawn1_name, scout_countdown_name)
             self._add_deactivate(rts.names.cleanup, scout_respawn1_name)
@@ -1898,47 +1889,69 @@ class ScnData:
             scout_countdown.enabled = False
             util_triggers.add_cond_timer(scout_countdown, 10)
             scout_create1 = scout_countdown.add_effect(effects.create_object)
-            scout_create1.object_list_unit_id = UCONST_SC
-            scout_create1.player_source = player
-            scout_create1.location_x, scout_create1.location_y = pos
+            scout_create1.object_list_unit_id = units.scout_cavalry
+            scout_create1.player_source = p.value
+            scout_create1.location_x = int(scout.x)
+            scout_create1.location_y = int(scout.y)
             self._add_activate(scout_countdown_name, scout_respawn1_name)
             self._add_deactivate(rts.names.cleanup, scout_countdown_name)
 
-        for player, flags in ((1, BOAR_FLAGS_1), (2, BOAR_FLAGS_2)):
-            for uid in flags:
-                name = f'{prefix} P{player} Capture at Flag {uid}'
+        for p, flags in player_flags.items():
+            for flag in flags:
+                util_units.remove(self._scn, flag, p)
+                x, y = int(flag.x), int(flag.y)
+
+                create = rts.init.add_effect(effects.create_object)
+                create.object_list_unit_id = FLAG_A_UCONST
+                create.player_source = p.value
+                create.facet = util_units.rad_to_facet(flag.rotation)
+                create.location_x, create.location_y = x, y
+
+                to_0 = rts.init.add_effect(effects.change_ownership)
+                to_0.player_source = p.value
+                to_0.player_target = Player.GAIA.value
+                to_0.object_list_unit_id = FLAG_A_UCONST
+                to_0.area_1_x, to_0.area_1_y = x, y
+                to_0.area_2_x, to_0.area_2_y = x, y
+
+                to_p = rts.begin.add_effect(effects.change_ownership)
+                to_p.player_source = Player.GAIA.value
+                to_p.player_target = p.value
+                to_p.object_list_unit_id = FLAG_A_UCONST
+                to_p.area_1_x, to_p.area_1_y = x, y
+                to_p.area_2_x, to_p.area_2_y = x, y
+
+                name = f'{prefix} P{p.value} Capture at ({flag.x}, {flag.y})'
                 self._add_activate(rts.names.begin, name)
                 capture = self._add_trigger(name)
                 capture.enabled = False
-                flag_x, flag_y = BOAR_FLAG_POS[uid]
                 boar_in_area = capture.add_condition(conditions.object_in_area)
                 boar_in_area.amount_or_quantity = 1
                 boar_in_area.player = 0
                 boar_in_area.object_list = UCONST_BOAR
-                util_triggers.set_cond_area(boar_in_area,
-                                            flag_x, flag_y, flag_x, flag_y)
+                util_triggers.set_cond_area(boar_in_area, x, y, x, y)
 
                 boar_remove = capture.add_effect(effects.remove_object)
                 boar_remove.object_list_unit_id = UCONST_BOAR
                 boar_remove.player_source = 0
+                # Leaves a small buffer to ensure the Boar is removed.
                 util_triggers.set_effect_area(
-                    boar_remove, flag_x - 1, flag_y - 1, flag_x + 1, flag_y + 1)
+                    boar_remove, x - 1, y - 1, x + 1, y + 1)
 
                 replace = capture.add_effect(effects.replace_object)
-                replace.number_of_units_selected = 1
-                replace.player_source = player
-                replace.player_target = player
-                replace.selected_object_id = uid
+                replace.player_source = p.value
+                replace.player_target = p.value
                 replace.object_list_unit_id = FLAG_A_UCONST
-                replace.object_list_unit_id_2 = UCONST_SC
-                if player == 1:
+                replace.object_list_unit_id_2 = units.scout_cavalry
+                util_triggers.set_effect_area(replace, x, y, x, y)
+                if p == Player.ONE:
                     self._add_effect_p1_score(capture, BOAR_POINTS)
                 else:
                     self._add_effect_p2_score(capture, BOAR_POINTS)
                 inc_var = capture.add_effect(effects.change_variable)
                 inc_var.quantity = 1
                 inc_var.operation = ChangeVarOp.add.value
-                var_name = f'p{player}-boar'
+                var_name = f'p{p.value}-boar'
                 inc_var.from_variable = self._var_ids[var_name]
                 inc_var.message = var_name
 
@@ -1973,7 +1986,7 @@ class ScnData:
         for player_source in (1, 2):
             cleanup_change = rts.cleanup.add_effect(effects.change_ownership)
             cleanup_change.player_source = player_source
-            cleanup_change.player_target = 0 # TODO cleanup using gaia, not p3
+            cleanup_change.player_target = 0
             util_triggers.set_effect_area(cleanup_change, 160, 80, 239, 159)
 
     def _add_tower_battlefield(self, index: int) -> None:
@@ -2954,6 +2967,7 @@ class ScnData:
             set_castle_hp.object_list_unit_id = buildings.castle
             set_castle_hp.operation = ChangeVarOp.set_op.value
 
+            # TODO ensure castle remains gaia between init and begin
             util_triggers.add_effect_change_own_unit(
                 rts.begin, Player.GAIA.value, p.value, castles[p].reference_id)
 
@@ -2977,7 +2991,7 @@ class ScnData:
                 to0.area_2_x = int(unit.x)
                 to0.area_2_y = int(unit.y)
 
-                top = rts.init.add_effect(effects.change_ownership)
+                top = rts.begin.add_effect(effects.change_ownership)
                 top.player_source = Player.GAIA.value
                 top.player_target = p.value
                 top.object_list_unit_id = unit.unit_id
