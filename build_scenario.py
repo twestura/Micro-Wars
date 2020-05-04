@@ -650,7 +650,6 @@ class ScnData:
         """
         self._clear_unused_units()
         self._name_variables()
-        self._add_ai_triggers()
         self._add_initial_triggers()
         self._setup_rounds()
         self._add_activate_and_deactivate_effects()
@@ -742,11 +741,6 @@ class ScnData:
         diff_plus.operation = ChangeVarOp.add.value
         diff_plus.from_variable = self._var_ids['score-difference']
         diff_plus.message = 'score-difference'
-        p3_wood = trigger.add_effect(effects.modify_resource)
-        p3_wood.quantity = pts
-        p3_wood.tribute_list = util_triggers.ACC_ATTR_WOOD
-        p3_wood.player_source = 3
-        p3_wood.operation = ChangeVarOp.add.value
 
     def _add_effect_p2_score(self, trigger: TriggerObject,
                              pts: int) -> None:
@@ -761,11 +755,6 @@ class ScnData:
         diff_subtract.operation = ChangeVarOp.subtract.value
         diff_subtract.from_variable = self._var_ids['score-difference']
         diff_subtract.message = 'score-difference'
-        p3_food = trigger.add_effect(effects.modify_resource)
-        p3_food.quantity = pts
-        p3_food.tribute_list = util_triggers.ACC_ATTR_FOOD
-        p3_food.player_source = 3
-        p3_food.operation = ChangeVarOp.add.value
 
     def _add_effect_score(self, trigger: TriggerObject, player: Player,
                           pts: int) -> None:
@@ -844,9 +833,9 @@ class ScnData:
         assert util_techs.is_tech(tech_name), f'{tech_name} is not a tech.'
         if tech_name not in self._researched_techs:
             self._researched_techs.add(tech_name)
-            tech_id = techs.tech_names.inverse[tech_name]
-            for player in (0, 1, 2, 3):
-                util_triggers.add_effect_research_tech(trigger, tech_id, player)
+            tid = techs.tech_names.inverse[tech_name]
+            for p in (Player.GAIA, Player.ONE, Player.TWO):
+                util_triggers.add_effect_research_tech(trigger, tid, p.value)
 
     def _research_techs(self, trigger: TriggerObject, index: int) -> None:
         """
@@ -992,56 +981,6 @@ class ScnData:
             var.retrievers[1].data = name
             var_change.append(var)
             var_count.data += 1
-
-    def _add_ai_triggers(self) -> None:
-        """
-        Adds triggers for informing players if the correct AI script
-        is not loaded.
-        """
-        # AI signals do not work in multiplayer on DE.
-        # If they do get fixed, this method should create three triggers:
-        # 1. Declare AI Victory
-        #    * Starts Disabled
-        #    * Timer: 10
-        #    * Declare Victory: Player 3
-        # 2. * AI Script Not Loaded
-        #    * Timer: 5
-        #    * Activate Trigger: Declare AI Victory
-        #    * Display Instructions: Micro Wars AI Script not Loaded
-        # 3. AI Script Loaded
-        #    * Condition: AI Signal 0
-        #    * Disable Trigger: AI Script Not Loaded
-        # In lieu of this feature, we create a workaround by adding Stone
-        # to the AI player and using an Accumulate Attribute condition to
-        # disable the message and declare victory triggers.
-        self._add_trigger_header('AI')
-        ai_victory_name = '[AI] Declare AI Victory'
-        ai_not_loaded_name = '[AI] AI Script not Loaded'
-        ai_loaded_name = '[AI] Script Loaded'
-
-        ai_victory = self._add_trigger(ai_victory_name)
-        ai_victory.enabled = False
-        util_triggers.add_cond_timer(ai_victory, 10)
-        ai_declare_winner = ai_victory.add_effect(effects.declare_victory)
-        ai_declare_winner.player_source = 3
-
-        ai_not_loaded = self._add_trigger(ai_not_loaded_name)
-        util_triggers.add_cond_timer(ai_not_loaded, 5)
-        self._add_activate(ai_not_loaded_name, ai_victory_name)
-        ai_msg = ai_not_loaded.add_effect(effects.display_instructions)
-        ai_msg.player_source = 3
-        ai_msg.message = 'Micro Wars AI Script is not Loaded'
-        ai_msg.display_time = 10
-        ai_msg.play_sound = False
-        ai_msg.sound_name = '\x00'
-        ai_msg.string_id = -1
-
-        ai_loaded = self._add_trigger(ai_loaded_name)
-        stone_2197 = ai_loaded.add_condition(conditions.accumulate_attribute)
-        stone_2197.amount_or_quantity = 2197
-        stone_2197.resource_type_or_tribute_list = util_triggers.ACC_ATTR_STONE
-        stone_2197.player = 3
-        self._add_deactivate(ai_loaded_name, ai_not_loaded_name)
 
     def _add_initial_triggers(self) -> None:
         """
@@ -3201,7 +3140,9 @@ class ScnData:
 
         # The Replace Object triggers create Onagers and Siege Onagers with
         # buggy projectiles.
-        is_onager = unit.unit_id in (units.onager, units.siege_onager)
+        is_onager = unit.unit_id in (
+            units.mangonel, units.onager, units.siege_onager
+        )
         storage_player = 0 if is_onager else from_player
 
         u = util_units.copy_unit(self._scn, unit, storage_player)
