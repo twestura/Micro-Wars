@@ -801,8 +801,19 @@ class ScnData:
         if unit.unit_id == units.trebuchet_packed:
             create.facet = util_units.rad_to_facet_treb(unit.rotation)
         elif unit.unit_id == buildings.stone_wall:
-            # TODO update for stone walls
-            create.facet = util_units.rad_to_facet(unit.rotation)
+            # Hard codes the Facet values for the Capture the Relic
+            # Stone Walls. Wall pieces have only 5 rotation values,
+            # but they don't seem to make sense.
+            if p == Player.ONE:
+                if x == 32:
+                    create.facet = 2 if y in (98, 113) else 1
+                else:
+                    create.facet = 2 if x in (17, 32) else 0
+            else:
+                if x == 47:
+                    create.facet = 2 if y in (128, 140) else 1
+                else:
+                    create.facet = 2 if x in (47, 61) else 0
         else:
             create.facet = util_units.rad_to_facet(unit.rotation)
         create.location_x, create.location_y = x, y
@@ -3345,19 +3356,10 @@ def scratch(args): # pylint: disable=unused-argument
     # scratch_path = 'scratch.aoe2scenario'
     scn = AoE2Scenario(SCENARIO_TEMPLATE)
     umgr = scn.object_manager.unit_manager
-    for k, ulst in enumerate(umgr.units):
-        print(f'k: {k}')
-        for unit in ulst:
-            print(f'{unit.unit_id}: ({unit.x}, {unit.y})')
-    print(f'num_lists: {len(umgr.units)}')
-    # unit_array = umgr.get_units_in_area(x1=0.0, y1=0.0, x2=240.0, y2=240.0,
-    #                                     players=[Player.ONE, Player.TWO])
-    # for u in unit_array:
-    #     if u.unit_id == units.galley:
-    #         uid = u.reference_id
-    #         x = u.x
-    #         y = u.y
-    #         print(f'{uid} - ({x}, {y})')
+    ulst = umgr.get_player_units(Player.TWO)
+    for unit in ulst:
+        if unit.unit_id == buildings.stone_wall:
+            print(f'{unit.unit_id}: ({unit.x}, {unit.y}) - {unit.rotation}')
 
 
 def main():
