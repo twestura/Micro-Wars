@@ -199,10 +199,6 @@ TIEBREAKER_OBJ_NAME = '[O] Tiebreaker'
 UNIT_ID_MAP_REVEALER = 837
 
 
-# Trigger name for creating map revealers for center fights.
-REVEALER_FIGHT_CREATE_NAME = '[I] Create Fight Map Revealers'
-
-
 # Trigger name for hiding map revealers for center fights.
 REVEALER_HIDE_NAME = '[I] Hide Map Revealers'
 
@@ -1977,25 +1973,39 @@ class ScnData:
         util_triggers.add_effect_modify_res(rts.begin, 300,
                                             util_triggers.ACC_ATTR_STONE)
 
-        # Begin changes ownership.
-        p3_units = umgr.get_units_in_area(160.0, 160.0, 240.0, 240.0,
-                                          players=[Player.THREE])
         next_flag = 'A'
-        flags = dict()
-        for unit in p3_units:
-            if unit.unit_id == FLAG_A_UCONST:
-                flags[next_flag] = unit
-                next_flag = chr(ord(next_flag) + 1)
-            else:
-                pos = unit.x + unit.y
-                player_target = 1 if pos < 400.0 else 2
-                util_triggers.add_effect_change_own_unit(
-                    rts.begin, 3, player_target, unit.reference_id)
+        flag_positions = dict()
+        for unit in umgr.get_units_in_area(160.0, 160.0, 240.0, 240.0,
+                                           players=[Player.GAIA]):
+            if unit.unit_id != FLAG_A_UCONST:
+                continue
+            x, y = int(unit.x), int(unit.y)
+            flag_positions[next_flag] = (x, y)
+            next_flag = chr(ord(next_flag) + 1)
+            util_units.remove(self._scn, unit, Player.GAIA)
+
+            create = rts.init.add_effect(effects.create_object)
+            create.object_list_unit_id = unit.unit_id
+            create.player_source = Player.ONE.value
+            create.facet = util_units.rad_to_facet(unit.rotation)
+            create.location_x, create.location_y = x, y
+
+            to0 = rts.init.add_effect(effects.change_ownership)
+            to0.player_source = Player.ONE.value
+            to0.player_target = Player.GAIA.value
+            to0.object_list_unit_id = unit.unit_id
+            to0.area_1_x, to0.area_1_y = x, y
+            to0.area_2_x, to0.area_2_y = x, y
+
+        for p in (Player.ONE, Player.TWO):
+            for unit in umgr.get_units_in_area(160.0, 160.0, 240.0, 240.0,
+                                               players=[p]):
+                self._create_unit_sequence(p, unit, rts)
 
         # Looping triggers for adding points while a player holds a flag.
         add_points_names = []
         for player in (1, 2):
-            for flag in flags:
+            for flag in flag_positions:
                 name = _tb_hold_flag_name(index, player, flag)
                 add_points_names.append(name)
                 add_points = self._add_trigger(name)
@@ -2026,17 +2036,33 @@ class ScnData:
             # TODO the next line is for the "full" towers, not the "cutoff"
             # versions to avoid the MemoryError.
             # for j in range(TOWER_MAX_NUM + 1 - i):
-                for flag, unit in flags.items():
+                for flag, (x, y) in flag_positions.items():
                     name = f'{prefix} Capture Flag {flag} with Score {i}-{j}'
                     scoring_trigger_names.append(name)
                     capture = self._add_trigger(name)
                     capture.enabled = False
                     capture.looping = True
                     self._add_activate(rts.names.begin, name)
-                    x1 = int(unit.x) - 2
-                    y1 = int(unit.y) - 2
-                    x2 = int(unit.x) + 2
-                    y2 = int(unit.y) + 2
+                    x1 = x - 2
+                    y1 = y - 2
+                    x2 = x + 2
+                    y2 = y + 2
+
+                    def add_change_ownership(pi: Player, pj: Player,
+                                             x: int, y: int,
+                                             trigger=capture) -> None:
+                        """
+                        Adds a change ownership effect to capture to change
+                        the flag at (x, y) from pi to pj.
+                        """
+                        change = trigger.add_effect(effects.change_ownership)
+                        change.player_source = pi.value
+                        change.player_target = pj.value
+                        change.object_list_unit_id = FLAG_A_UCONST
+                        change.area_1_x = x
+                        change.area_1_y = y
+                        change.area_2_x = x
+                        change.area_2_y = y
 
                     # p1 score not >= i + 1.
                     p1_upper = capture.add_condition(conditions.object_in_area)
@@ -2068,13 +2094,9 @@ class ScnData:
                         owner.player = 2
                         owner.amount_or_quantity = 1
                         owner.object_list = FLAG_A_UCONST
-                        util_triggers.set_cond_area(owner,
-                                                    int(unit.x), int(unit.y),
-                                                    int(unit.x), int(unit.y))
-                        util_triggers.add_effect_change_own_unit(
-                            capture, 1, 2, unit.reference_id)
-                        util_triggers.add_effect_change_own_unit(
-                            capture, 3, 2, unit.reference_id)
+                        util_triggers.set_cond_area(owner, x, y, x, y)
+                        add_change_ownership(Player.ONE, Player.TWO, x, y)
+                        add_change_ownership(Player.GAIA, Player.TWO, x, y)
                         self._add_deactivate(
                             name, _tb_hold_flag_name(index, 1, flag))
                         self._add_activate(
@@ -2082,16 +2104,12 @@ class ScnData:
                     elif i == j:
                         owner = capture.add_condition(conditions.object_in_area)
                         owner.inverted = True
-                        owner.player = 3
+                        owner.player = 0
                         owner.amount_or_quantity = 1
                         owner.object_list = FLAG_A_UCONST
-                        util_triggers.set_cond_area(owner,
-                                                    int(unit.x), int(unit.y),
-                                                    int(unit.x), int(unit.y))
-                        util_triggers.add_effect_change_own_unit(
-                            capture, 1, 3, unit.reference_id)
-                        util_triggers.add_effect_change_own_unit(
-                            capture, 2, 3, unit.reference_id)
+                        util_triggers.set_cond_area(owner, x, y, x, y)
+                        add_change_ownership(Player.ONE, Player.GAIA, x, y)
+                        add_change_ownership(Player.TWO, Player.GAIA, x, y)
                         self._add_deactivate(
                             name, _tb_hold_flag_name(index, 1, flag))
                         self._add_deactivate(
@@ -2102,25 +2120,19 @@ class ScnData:
                         owner.player = 1
                         owner.amount_or_quantity = 1
                         owner.object_list = FLAG_A_UCONST
-                        util_triggers.set_cond_area(owner,
-                                                    int(unit.x), int(unit.y),
-                                                    int(unit.x), int(unit.y))
-                        util_triggers.add_effect_change_own_unit(
-                            capture, 2, 1, unit.reference_id)
-                        util_triggers.add_effect_change_own_unit(
-                            capture, 3, 1, unit.reference_id)
+                        util_triggers.set_cond_area(owner, x, y, x, y)
+                        add_change_ownership(Player.TWO, Player.ONE, x, y)
+                        add_change_ownership(Player.GAIA, Player.ONE, x, y)
                         self._add_activate(
                             name, _tb_hold_flag_name(index, 1, flag))
                         self._add_deactivate(
                             name, _tb_hold_flag_name(index, 2, flag))
 
-        starting_building_constants = {
-            UCONST_ARCHERY_RANGE, UCONST_BARRACKS, UCONST_STABLE, UCONST_TC
-        }
-        for player in (1, 2):
+        for p in (Player.ONE, Player.TWO):
             for enemy_points in range(event.MAX_POINTS):
-                defeated_name = _tb_defeated_name(index, player, enemy_points)
+                defeated_name = _tb_defeated_name(index, p.value, enemy_points)
                 defeated = self._add_trigger(defeated_name)
+                defeated.enabled = False
                 self._add_activate(rts.names.begin, defeated_name)
                 self._add_deactivate(rts.names.p1_wins, defeated_name)
                 self._add_deactivate(rts.names.p2_wins, defeated_name)
@@ -2131,7 +2143,7 @@ class ScnData:
                 # Deactivates all other such triggers.
                 for player_ in (1, 2):
                     for enemy_points_ in range(event.MAX_POINTS):
-                        if player != player_ and enemy_points != enemy_points_:
+                        if p.value != player_ and enemy_points != enemy_points_:
                             self._add_deactivate(
                                 defeated_name,
                                 _tb_defeated_name(index, player_, enemy_points_)
@@ -2139,21 +2151,21 @@ class ScnData:
 
                 # A player is defeated when they have no units and all of their
                 # starting buildings are destroyed.
-                util_triggers.add_cond_pop0(defeated, player)
-                for unit in p3_units:
-                    if unit.unit_id not in starting_building_constants:
-                        continue
-                    pos = unit.x + unit.y
-                    building_player = 1 if pos < 400.0 else 2
-                    if building_player != player:
-                        continue
-                    building_dead = defeated.add_condition(
-                        conditions.destroy_object)
-                    building_dead.unit_object = unit.reference_id
-                other_player = 2 if player == 1 else 1
+                util_triggers.add_cond_pop0(defeated, p.value)
+                for building_const in (
+                        buildings.archery_range, buildings.barracks,
+                        buildings.stable, buildings.town_center,
+                        buildings.watch_tower):
+                    no_build = defeated.add_condition(conditions.object_in_area)
+                    no_build.inverted = True
+                    no_build.player = p.value
+                    no_build.amount_or_quantity = 1
+                    no_build.object_list = building_const
+                    util_triggers.set_cond_area(no_build, 160, 160, 239, 239)
+                other_player = Player.TWO if p == Player.ONE else Player.ONE
                 other_points = defeated.add_condition(conditions.variable_value)
                 other_points.amount_or_quantity = enemy_points
-                other_var_name = f'p{other_player}-battlefield-points'
+                other_var_name = f'p{other_player.value}-battlefield-points'
                 other_points.variable = self._var_ids[other_var_name]
                 other_points.comparison = VarValComp.equal.value
                 remaining_points = event.MAX_POINTS - enemy_points
@@ -2162,10 +2174,7 @@ class ScnData:
                 add_points.operation = ChangeVarOp.add.value
                 add_points.from_variable = self._var_ids[other_var_name]
                 add_points.message = other_var_name
-                if player == 1:
-                    self._add_effect_p2_score(defeated, remaining_points)
-                else:
-                    self._add_effect_p1_score(defeated, remaining_points)
+                self._add_effect_score(defeated, other_player, remaining_points)
 
         self._add_activate(rts.names.begin, rts.names.p1_wins)
         var_p1 = rts.p1_wins.add_condition(conditions.variable_value)
@@ -2184,15 +2193,15 @@ class ScnData:
             self._add_deactivate(rts.names.p2_wins, scoring_trigger_name)
 
         # Cleanup removes units from player control.
-        for p in (1, 2):
-            change_to_3 = rts.cleanup.add_effect(effects.change_ownership)
-            change_to_3.player_source = p
-            change_to_3.player_target = 0
-            util_triggers.set_effect_area(change_to_3, 160, 160, 238, 238)
+        for p in (Player.ONE, Player.TWO):
+            change_to_0 = rts.cleanup.add_effect(effects.change_ownership)
+            change_to_0.player_source = p.value
+            change_to_0.player_target = Player.GAIA.value
+            util_triggers.set_effect_area(change_to_0, 160, 160, 238, 238)
         # Removes Villagers so they stop gathering resources.
         for uconst in UCONST_VILS:
             remove_vils = rts.cleanup.add_effect(effects.remove_object)
-            remove_vils.player_source = 0
+            remove_vils.player_source = Player.GAIA.value
             remove_vils.object_list_unit_id = uconst
             util_triggers.set_effect_area(remove_vils, 160, 160, 238, 238)
 
