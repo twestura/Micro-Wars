@@ -3118,63 +3118,71 @@ class ScnData:
         """
         assert index
         rts = _RoundTriggers(self, index)
+        umgr = self._scn.object_manager.unit_manager
         prefix = f'[R{index}]' if index else '[T]'
 
+        player_units = {Player.ONE: [], Player.TWO: []}
         kill_king_triggers = dict()
 
-        for k, kingid in enumerate((REGICIDE_KING_ID_P1, REGICIDE_KING_ID_P2)):
-            player = k + 1
-            replace_flag = rts.init.add_effect(effects.replace_object)
-            replace_flag.number_of_units_selected = 1
-            replace_flag.selected_object_id = kingid
-            replace_flag.player_source = 3
-            replace_flag.player_target = player
-            replace_flag.object_list_unit_id = FLAG_A_UCONST
-            replace_flag.object_list_unit_id_2 = UCONST_KING
+        for p in (Player.ONE, Player.TWO):
+            # Leaves a small buffer to avoid selecting the units at the
+            # very top of the map.
+            for unit in umgr.get_units_in_area(160.0, 5.0, 235.0, 80.0,
+                                               players=[p]):
+                uid = unit.reference_id
+                uconst = unit.unit_id
+                if uconst == units.king:
+                    kill_king_name = f"{prefix} Player {p.value}'s King Killed"
+                    self._add_activate(rts.names.begin, kill_king_name)
+                    self._add_deactivate(rts.names.cleanup, kill_king_name)
+                    kill_king = self._add_trigger(kill_king_name)
+                    kill_king_triggers[p] = kill_king
+                    kill_king.enabled = False
+                    util_triggers.add_cond_hp0(kill_king, uid)
+                    record_kill = kill_king.add_effect(effects.change_variable)
+                    record_kill.quantity = 1
+                    record_kill.operation = ChangeVarOp.add.value
+                    record_kill.from_variable = self._var_ids[
+                        f'p{p.value}-king-killed'
+                    ]
+                else:
+                    player_units[p].append(unit)
+                    uname = unit.name
+                    pts_name = (
+                        f"{prefix} Regicide Kill P{p.value}'s {uname} ({uid})"
+                    )
+                    self._add_activate(rts.names.begin, pts_name)
+                    self._add_deactivate(rts.names.cleanup, pts_name)
+                    award_pts = self._add_trigger(pts_name)
+                    util_triggers.add_cond_hp0(award_pts, uid)
+                    # TODO debug when not all kills were added when a king died
+                    if p == Player.ONE:
+                        self._add_effect_p2_score(award_pts, 1)
+                    else:
+                        self._add_effect_p1_score(award_pts, 1)
+                # Change the unit constant after using the unit's name.
+                unit.unit_id = UCONST_INVISIBLE_OBJECT
 
-            kill_king_name = f"{prefix} Player {player}'s King Killed"
-            self._add_activate(rts.names.begin, kill_king_name)
-            self._add_deactivate(rts.names.cleanup, kill_king_name)
-            kill_king = self._add_trigger(kill_king_name)
-            kill_king.enabled = False
-            kill_cond = kill_king.add_condition(conditions.object_in_area)
-            kill_cond.amount_or_quantity = 1
-            kill_cond.player = player
-            kill_cond.object_list = UCONST_KING
-            kill_cond.inverted = True
-            util_triggers.set_cond_area(kill_cond, 160, 0, 239, 79)
-            record_kill = kill_king.add_effect(effects.change_variable)
-            record_kill.quantity = 1
-            record_kill.operation = ChangeVarOp.add.value
-            record_kill.from_variable = self._var_ids[f'p{player}-king-killed']
-            kill_king_triggers[player] = kill_king
+                replace = rts.init.add_effect(effects.replace_object)
+                replace.number_of_units_selected = 1
+                replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
+                replace.player_source = p.value
+                replace.player_target = p.value
+                replace.object_list_unit_id_2 = uconst
+                replace.selected_object_id = uid
+                util_triggers.add_effect_change_own_unit(
+                    rts.init, p.value, Player.GAIA.value, uid)
+                util_triggers.add_effect_change_own_unit(
+                    rts.begin, Player.GAIA.value, p.value, uid)
 
-        # Use a small buffer to avoid selecting the units at the very top
-        # of the map.
-        p3_units = self._scn.object_manager.unit_manager.get_units_in_area(
-            x1=160.0, y1=5.0, x2=235.0, y2=80.0, players=[Player.THREE])
-        for unit in p3_units:
-            if unit.unit_id == FLAG_A_UCONST:
-                continue
-            pos = unit.x + unit.y
-            player = 1 if pos < 240.0 else 2
-            uid = unit.reference_id
-            util_triggers.add_effect_change_own_unit(rts.begin, 3, player, uid)
-            name = unit.name
-            pts_name = f"{prefix} Regicide Kill P{player}'s {name} ({uid})"
-            self._add_activate(rts.names.begin, pts_name)
-            self._add_deactivate(rts.names.cleanup, pts_name)
-            award_pts = self._add_trigger(pts_name)
-            util_triggers.add_cond_hp0(award_pts, uid)
-            king_death = kill_king_triggers[player]
-            kill_unit = king_death.add_effect(effects.kill_object)
-            kill_unit.number_of_units_selected = 1
-            kill_unit.selected_object_id = uid
-            kill_unit.player_source = player
-            if player == 1:
-                self._add_effect_p2_score(award_pts, 1)
-            else:
-                self._add_effect_p1_score(award_pts, 1)
+        # Kills all of a player's unis when their King is killed.
+        for p, ulst in player_units.items():
+            for unit in ulst:
+                king_death = kill_king_triggers[p]
+                kill_unit = king_death.add_effect(effects.kill_object)
+                kill_unit.number_of_units_selected = 1
+                kill_unit.selected_object_id = unit.reference_id
+                kill_unit.player_source = p.value
 
         stalemate_name = f'{prefix} Regicide Stalemate'
         stalemate = self._add_trigger(stalemate_name)
@@ -3183,14 +3191,14 @@ class ScnData:
         self._add_activate(stalemate_name, rts.names.cleanup)
         self._add_deactivate(stalemate_name, rts.names.p1_wins)
         self._add_deactivate(stalemate_name, rts.names.p2_wins)
-        for player in (1, 2):
+        for p in (Player.ONE, Player.TWO):
             pop1 = stalemate.add_condition(conditions.accumulate_attribute)
-            pop1.player = player
+            pop1.player = p.value
             pop1.amount_or_quantity = 1
             pop1.resource_type_or_tribute_list = (
                 util_triggers.ACC_ATTR_POP_HEADROOM)
             popnot2 = stalemate.add_condition(conditions.accumulate_attribute)
-            popnot2.player = player
+            popnot2.player = p.value
             popnot2.amount_or_quantity = 2
             popnot2.resource_type_or_tribute_list = (
                 util_triggers.ACC_ATTR_POP_HEADROOM)
@@ -3205,10 +3213,10 @@ class ScnData:
         util_triggers.add_cond_pop0(rts.p2_wins, 1)
 
         # Cleanup removes units from player control.
-        for player_source in (1, 2):
+        for p in (Player.ONE, Player.TWO):
             cleanup_change = rts.cleanup.add_effect(effects.change_ownership)
-            cleanup_change.player_source = player_source
-            cleanup_change.player_target = 0
+            cleanup_change.player_source = p.value
+            cleanup_change.player_target = Player.GAIA.value
             util_triggers.set_effect_area(cleanup_change, 160, 0, 239, 79)
 
     def _add_fight(self, index: int, f: Fight) -> None:
