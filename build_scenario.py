@@ -319,21 +319,6 @@ RELIC_POSITIONS = {(28, 125), (35, 132), (48, 112)}
 ROUND_RELICS = {1: 3, 2: 6, 3: 9}
 
 
-# Reference IDs for Player 1's Monasteries in Capture the Relic.
-MONASTERIES_P1 = [10456, 10457]
-
-
-# Reference IDs for Player 2's Monasteries in Capture the Relic.
-MONASTERIES_P2 = [10454, 10455]
-
-
-# Reference IDs for each Player's Monasteries in Capture the Relic.
-MONASTERIES = {
-    1: MONASTERIES_P1,
-    2: MONASTERIES_P2,
-}
-
-
 # Unit ID of Flag A.
 FLAG_A_UCONST = 600
 
@@ -2622,6 +2607,7 @@ class ScnData:
             create.location_x = int(util_units.get_x(unit)) - 19 + p2_pos[0] + 1
             create.location_y = int(util_units.get_y(unit)) - 29 + p2_pos[1]
 
+        # TODO replace these triggers with create -> gaia -> player sequence
         change_own_p1 = rts.begin.add_effect(effects.change_ownership)
         change_own_p1.player_source = 3
         change_own_p1.player_target = 1
@@ -2746,31 +2732,36 @@ class ScnData:
                     self._add_deactivate(name, n)
             self._add_activate(name, round_cleanup_name)
 
-        monastery_loss_names = (f'{prefix} Player 1 Loses Monasteries',
-                                f'{prefix} Player 2 Loses Monasteries')
-        for k, name in enumerate(monastery_loss_names):
-            player = k + 1
-            monastery_loss = self._add_trigger(name)
-            for monastery in MONASTERIES[player]:
-                loss = monastery_loss.add_condition(conditions.destroy_object)
-                loss.unit_object = monastery
+        # Defeats a player if they lose their Monasteries.
+        for p in (Player.ONE, Player.TWO):
+            name = f'{prefix} P{p.value} Loses Monasteries'
+            other_player = Player.TWO if p == Player.ONE else Player.ONE
+            other_name = f'{prefix} P{other_player.value} Loses Monasteries'
+            lose = self._add_trigger(name)
+            lose.enabled = False
+            no_monasteries = lose.add_condition(conditions.object_in_area)
+            no_monasteries.inverted = True
+            no_monasteries.player = p.value
+            no_monasteries.amount_or_quantity = 1
+            no_monasteries.object_list = buildings.monastery
+            util_triggers.set_cond_area(no_monasteries, 0, 80, 79, 159)
             self._add_activate(rts.names.begin, name)
             self._add_activate(name, rts.names.cleanup)
             self._add_deactivate(rts.names.p1_wins, name)
             self._add_deactivate(rts.names.p2_wins, name)
+            self._add_deactivate(name, other_name)
             for cond_name in r1_cond_names + r2_cond_names + r3_cond_names:
                 self._add_deactivate(name, cond_name)
-
-            if player == 1:
-                self._add_effect_p2_score(monastery_loss, 100)
+            if p == Player.ONE:
+                self._add_effect_p2_score(lose, 100)
             else:
-                self._add_effect_p1_score(monastery_loss, 100)
+                self._add_effect_p1_score(lose, 100)
 
         # Cleanup removes units from player control.
-        for player in (1, 2):
+        for p in (Player.ONE, Player.TWO):
             change_to_0 = rts.cleanup.add_effect(effects.change_ownership)
-            change_to_0.player_source = player
-            change_to_0.player_target = 0
+            change_to_0.player_source = p.value
+            change_to_0.player_target = Player.GAIA.value
             util_triggers.set_effect_area(change_to_0, 0, 80, 79, 159)
 
         util_triggers.add_effect_modify_res(
