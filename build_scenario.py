@@ -379,7 +379,7 @@ MINIGAME_CENTERS = {
 
 
 def map_revealer_pos(pos: Tuple[int, int]) -> List[Tuple[int, int]]:
-    """Yields a set of map revealers locations centered around pos."""
+    """Yields a set of map revealer locations centered around pos."""
     x, y = pos
     return [(a, b)
             for a in range(x - 27, x + 28, 3)
@@ -519,19 +519,17 @@ class _RoundTriggers:
         # a minigame, or if the event is a minigame (which can't be repeated).
         e = self._scn._events[index]
         prev = self._scn._events[index - 1]
-        if isinstance(e, Fight) and (index == 1 or isinstance(prev, Minigame)):
-            # TODO adding the map revealers needs to add effects to a trigger
-            self._scn._add_activate(self.names.init, REVEALER_FIGHT_CREATE_NAME)
-        elif isinstance(self._scn._events[index], Minigame):
-            self._scn._add_activate(self.names.init,
-                                    self._scn._revealers[e.name])
-
         center_pos = (MINIGAME_CENTERS[e.name]
                       if isinstance(e, Minigame)
                       else (FIGHT_CENTER_X, FIGHT_CENTER_Y))
-        for player in (1, 2):
+        if (isinstance(e, Minigame)
+                or isinstance(e, Fight)
+                and (index == 1 or isinstance(prev, Minigame))):
+            self._scn._add_revealers(self.init, center_pos)
+
+        for p in (Player.ONE, Player.TWO):
             change_view = self._init.add_effect(effects.change_view)
-            change_view.player_source = player
+            change_view.player_source = p.value
             change_view.location_x, change_view.location_y = center_pos
 
         self._scn._research_techs(self._init, index)
@@ -570,12 +568,7 @@ class _RoundTriggers:
 
         self._inc = self._scn._add_trigger(self.names.inc)
         self._inc.enabled = False
-        delay_after = DELAY_ROUND_AFTER
-        # Hard codes a longer delay for Castle Siege so the destruction
-        # animation can play.
-        if isinstance(e, Minigame) and e.name == 'Castle Siege':
-            delay_after += 5
-        util_triggers.add_cond_timer(self._inc, delay_after)
+        util_triggers.add_cond_timer(self._inc, DELAY_ROUND_AFTER)
 
         if index:
             change_round = self._inc.add_effect(effects.change_variable)
@@ -1031,7 +1024,7 @@ class ScnData:
         self._initialize_variable_values()
         self._add_start_timer()
         self._set_start_views()
-        self._create_map_revealer_triggers()
+        self._create_map_revealer_remover()
         self._remove_boar_food()
         self._change_train_locations()
         self._add_objectives()
@@ -1061,7 +1054,6 @@ class ScnData:
         trigger_name = '[I] Initialize Start Timer'
         init_timer = self._add_trigger(trigger_name)
         init_timer.description = 'Initializes a start timer to start round 1.'
-
         util_triggers.add_cond_timer(init_timer, DELAY_BEGIN)
         inc_round_count = init_timer.add_effect(effects.change_variable)
         inc_round_count.quantity = 1
@@ -1079,58 +1071,38 @@ class ScnData:
         trigger_name = '[I] Initialize Starting Player Views'
         init_views = self._add_trigger(trigger_name)
         init_views.description = 'Changes p1 and p2 view to the middle.'
-
-        for player in (1, 2):
+        for p in (Player.ONE, Player.TWO):
             change_view = init_views.add_effect(effects.change_view)
-            change_view.player_source = player
+            change_view.player_source = p.value
             change_view.location_x = START_VIEW_X
             change_view.location_y = START_VIEW_Y
             change_view.scroll = False
 
-    def _add_revealer_trigger(self, name: str) -> None:
+    def _add_revealers(self, trigger: TriggerObject,
+                       center: Tuple[int, int]) -> None:
         """
-        Adds a create trigger for map revealers for the event given by name.
-
-        name is 'Fight' for a fight or the name of a minigame for a minigame.
-        Checks that name satisfies this precondition.
+        Adds a sequence of effects to trigger for creating map revealers
+        centered at tile with x and y coordinates given by center.
         """
-        assert name == 'Fight' or name in MINIGAME_CENTERS
-        create_name = f'[I] Create {name} Map Revealers'
-        self._revealers[name] = create_name
-        create_revealers = self._add_trigger(create_name)
-        create_revealers.enabled = False
-        create_revealers.looping = True
-        self._add_deactivate(create_name, create_name)
-        revealer_pos = map_revealer_pos((FIGHT_CENTER_X, FIGHT_CENTER_Y)
-                                        if name == 'Fight'
-                                        else MINIGAME_CENTERS[name])
-        for player in (1, 2):
-            for (x, y) in revealer_pos:
-                create = create_revealers.add_effect(effects.create_object)
+        for p in (Player.ONE, Player.TWO):
+            for (x, y) in map_revealer_pos(center):
+                create = trigger.add_effect(effects.create_object)
                 create.object_list_unit_id = UNIT_ID_MAP_REVEALER
-                create.player_source = player
-                create.location_x = x
-                create.location_y = y
+                create.player_source = p.value
+                create.location_x, create.location_y = x, y
 
-    def _create_map_revealer_triggers(self) -> None:
+    def _create_map_revealer_remover(self) -> None:
         """
-        Creates a set of map revealers to cover fight and minigame areas.
+        Creates a "Hide" trigger that removes all map revealers on the map.
         Loops and disables itself.
-        Can be re-enabled to make additional map revealers.
-
-        Also adds a "Hide" trigger that removes all map revealers on the map.
         """
-        self._add_revealer_trigger('Fight')
-        for name in MINIGAME_CENTERS:
-            self._add_revealer_trigger(name)
-
         hide_revealers = self._add_trigger(REVEALER_HIDE_NAME)
         hide_revealers.enabled = False
         hide_revealers.looping = True
         self._add_deactivate(REVEALER_HIDE_NAME, REVEALER_HIDE_NAME)
-        for player in (1, 2):
+        for p in (Player.ONE, Player.TWO):
             remove = hide_revealers.add_effect(effects.remove_object)
-            remove.player_source = player
+            remove.player_source = p.value
             remove.object_list_unit_id = UNIT_ID_MAP_REVEALER
             util_triggers.set_effect_area(remove, 0, 0, 239, 239)
 
@@ -2979,42 +2951,9 @@ class ScnData:
         util_triggers.add_effect_modify_res(
             rts.init, 650, util_triggers.ACC_ATTR_STONE)
 
-        castles = dict()
-        player_units = {Player.ONE: [], Player.TWO: []}
-
         # Begin changes ownership
         for p in (Player.ONE, Player.TWO):
             ulst = umgr.get_units_in_area(80.0, 0.0, 160.0, 80.0, players=[p])
-            for unit in ulst:
-                if unit.unit_id == buildings.castle:
-                    castles[p] = unit
-                else:
-                    player_units[p].append(unit)
-        for p in (Player.ONE, Player.TWO):
-            castles[p] = util_units.change_player(
-                self._scn, castles[p], p, Player.GAIA)
-
-            # Gives Castles the same HP as Byzantine Imperial Casteles with
-            # Hoardings.
-            set_castle_hp = rts.init.add_effect(effects.change_object_hp)
-            set_castle_hp.quantity = CASTLE_HP_BYZ_HOARDINGS
-            set_castle_hp.player_source = Player.GAIA.value
-            set_castle_hp.selected_object_id = castles[p].reference_id
-            set_castle_hp.number_of_units_selected = 1
-            set_castle_hp.object_list_unit_id = buildings.castle
-            set_castle_hp.operation = ChangeVarOp.set_op.value
-
-            # Ensures Castles remain Gaia between init and begin.
-            # TODO ensure this works along with Map Revealers.
-            util_triggers.add_effect_change_own_unit(
-                rts.init, Player.GAIA.value, p.value, castles[p].reference_id)
-            util_triggers.add_effect_change_own_unit(
-                rts.init, p.value, Player.GAIA.value, castles[p].reference_id)
-
-            util_triggers.add_effect_change_own_unit(
-                rts.begin, Player.GAIA.value, p.value, castles[p].reference_id)
-
-        for p, ulst in player_units.items():
             for unit in ulst:
                 util_units.remove(self._scn, unit, p)
                 x, y = int(unit.x), int(unit.y)
@@ -3042,14 +2981,18 @@ class ScnData:
         # P2 loses castle.
         p2_loses_castle = self._add_trigger(p2_loses_castle_name)
         p2_loses_castle.enabled = False
+        p2_no_castle = p2_loses_castle.add_condition(conditions.object_in_area)
+        p2_no_castle.inverted = 1
+        p2_no_castle.player = Player.TWO.value
+        p2_no_castle.amount_or_quantity = 1
+        p2_no_castle.object_list = buildings.castle
+        util_triggers.set_cond_area(p2_no_castle, 80, 0, 159, 79)
         p2_castle_var = p2_loses_castle.add_effect(effects.change_variable)
         p2_castle_var.quantity = 1
         p2_castle_var.operation = ChangeVarOp.set_op.value
         p2_castle_var.from_variable = self._var_ids['p2-castle-destroyed']
         p2_castle_var.message = 'p2-castle-destroyed'
         self._add_activate(rts.names.begin, p2_loses_castle_name)
-        util_triggers.add_cond_hp0(p2_loses_castle,
-                                   castles[Player.TWO].reference_id)
         self._add_activate(p2_loses_castle_name, rts.names.p1_wins)
         self._add_deactivate(p2_loses_castle_name, p2_loses_army_name)
         self._add_deactivate(p2_loses_castle_name, p1_loses_castle_name)
@@ -3072,14 +3015,18 @@ class ScnData:
         # P1 loses castle.
         p1_loses_castle = self._add_trigger(p1_loses_castle_name)
         p1_loses_castle.enabled = False
+        p1_no_castle = p1_loses_castle.add_condition(conditions.object_in_area)
+        p1_no_castle.inverted = 1
+        p1_no_castle.player = Player.ONE.value
+        p1_no_castle.amount_or_quantity = 1
+        p1_no_castle.object_list = buildings.castle
+        util_triggers.set_cond_area(p1_no_castle, 80, 0, 159, 79)
         p1_castle_var = p1_loses_castle.add_effect(effects.change_variable)
         p1_castle_var.quantity = 1
         p1_castle_var.operation = ChangeVarOp.set_op.value
         p1_castle_var.from_variable = self._var_ids['p1-castle-destroyed']
         p1_castle_var.message = 'p1-castle-destroyed'
         self._add_activate(rts.names.begin, p1_loses_castle_name)
-        util_triggers.add_cond_hp0(p1_loses_castle,
-                                   castles[Player.ONE].reference_id)
         self._add_activate(p1_loses_castle_name, rts.names.p2_wins)
         self._add_deactivate(p1_loses_castle_name, p1_loses_army_name)
         self._add_deactivate(p1_loses_castle_name, p2_loses_castle_name)
@@ -3155,7 +3102,9 @@ class ScnData:
                     self._add_deactivate(rts.names.cleanup, pts_name)
                     award_pts = self._add_trigger(pts_name)
                     util_triggers.add_cond_hp0(award_pts, uid)
-                    # TODO debug when not all kills were added when a king died
+                    # TODO debug when not all kills are counted when a king dies
+                    # Perhaps base points based on population?
+                    # Does this affect other fights as well?
                     if p == Player.ONE:
                         self._add_effect_p2_score(award_pts, 1)
                     else:
