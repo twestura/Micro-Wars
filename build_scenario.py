@@ -120,6 +120,8 @@ INITIAL_VARIABLES = [
     ('p2-battlefield-points', 0),
     ('p1-most-relics', 0),
     ('p2-most-relics', 0),
+    ('p1-castle-constructed', 0),
+    ('p2-castle-constructed', 0),
     ('p1-castle-destroyed', 0),
     ('p2-castle-destroyed', 0),
     ('p1-king-killed', 0),
@@ -336,14 +338,6 @@ MONASTERIES = {
 FLAG_A_UCONST = 600
 
 
-# Unit ids for Player 1's flags around the DauT Castle hill.
-DC_FLAGS_P1 = [168, 149, 151, 153, 170, 155, 172, 178]
-
-
-# Unit ids for Player 2's flags around the DauT Castle hill.
-DC_FLAGS_P2 = [148, 150, 152, 169, 154, 171, 156, 177]
-
-
 # The Stone quantity to assign for each player at the start of the
 # DauT Castle minigame.
 DC_STONE = 1300
@@ -351,18 +345,6 @@ DC_STONE = 1300
 
 # Unit constant of a Castle.
 CASTLE_UCONST = 82
-
-
-# The number of Hit Points of an Imperial Age Byzantine Castle with Hoardings.
-CASTLE_HP_BYZ_HOARDINGS = 7454
-
-
-# Unit ID for the flag/king of Player 1 in the Regicide game.
-REGICIDE_KING_ID_P1 = 52842
-
-
-# Unit ID for the flag/king of Player 2 in the Regicide game.
-REGICIDE_KING_ID_P2 = 52916
 
 
 # Center positions of minigames to be used when changing the view.
@@ -1100,7 +1082,7 @@ class ScnData:
         hide_revealers.enabled = False
         hide_revealers.looping = True
         self._add_deactivate(REVEALER_HIDE_NAME, REVEALER_HIDE_NAME)
-        for p in (Player.ONE, Player.TWO):
+        for p in (Player.GAIA, Player.ONE, Player.TWO):
             remove = hide_revealers.add_effect(effects.remove_object)
             remove.player_source = p.value
             remove.object_list_unit_id = UNIT_ID_MAP_REVEALER
@@ -1497,21 +1479,6 @@ class ScnData:
         obj_daut.mute_objectives = True
         util_triggers.add_cond_gaia_defeated(obj_daut)
 
-        p3_units = util_units.get_units_array(self._scn, 3)
-        units_in_area = util_units.units_in_area(p3_units, 0.0, 0.0, 80.0, 80.0)
-        flag_positions = [
-            (util_units.get_x(flag_a), util_units.get_y(flag_a))
-            for flag_a in units_in_area
-            if util_units.get_unit_constant(flag_a) == FLAG_A_UCONST
-        ]
-        x1, y1 = (math.floor(pos) for pos in util.min_point(flag_positions))
-        x2, y2 = (math.ceil(pos) for pos in util.max_point(flag_positions))
-        # Adjusts positions to keep the Castle strictly inside the flags.
-        x1 += 3
-        y1 += 3
-        x2 -= 3
-        y2 -= 3
-
         obj_daut_p1_name = f'[O] DauT Castle Player 1 Castle Constructed'
         self._round_objectives[index].append(obj_daut_p1_name)
         obj_daut_p1 = self._add_trigger(obj_daut_p1_name)
@@ -1522,11 +1489,10 @@ class ScnData:
         obj_daut_p1.display_on_screen = True
         obj_daut_p1.description_order = 49
         obj_daut_p1.mute_objectives = True
-        p1_castle_in_area = obj_daut_p1.add_condition(conditions.object_in_area)
-        p1_castle_in_area.amount_or_quantity = 1
-        p1_castle_in_area.player = 1
-        p1_castle_in_area.object_list = CASTLE_UCONST
-        util_triggers.set_cond_area(p1_castle_in_area, x1, y1, x2, y2)
+        castle1_made = obj_daut_p1.add_condition(conditions.variable_value)
+        castle1_made.amount_or_quantity = 1
+        castle1_made.variable = self._var_ids['p1-castle-constructed']
+        castle1_made.comparison = VarValComp.equal.value
 
         obj_daut_p2_name = f'[O] DauT Castle Player 2 Castle Constructed'
         self._round_objectives[index].append(obj_daut_p2_name)
@@ -1538,11 +1504,10 @@ class ScnData:
         obj_daut_p2.display_on_screen = True
         obj_daut_p2.description_order = 48
         obj_daut_p2.mute_objectives = True
-        p2_castle_in_area = obj_daut_p2.add_condition(conditions.object_in_area)
-        p2_castle_in_area.amount_or_quantity = 1
-        p2_castle_in_area.player = 2
-        p2_castle_in_area.object_list = CASTLE_UCONST
-        util_triggers.set_cond_area(p2_castle_in_area, x1, y1, x2, y2)
+        castle2_made = obj_daut_p2.add_condition(conditions.variable_value)
+        castle2_made.amount_or_quantity = 1
+        castle2_made.variable = self._var_ids['p2-castle-constructed']
+        castle2_made.comparison = VarValComp.equal.value
 
     def _add_castle_siege_objectives(self, index: int):
         """Adds the objectives for the Castle Siege minigame."""
@@ -2820,6 +2785,8 @@ class ScnData:
         """
         assert index
         rts = _RoundTriggers(self, index)
+        umgr = self._scn.object_manager.unit_manager
+
         prefix = f'[R{index}]' if index else '[T]'
         p1_wins_name = f'{prefix} Player 1 Wins Round'
         p1_builds_castle_name = f'{prefix} Player 1 Constructs Castle'
@@ -2831,16 +2798,38 @@ class ScnData:
         util_triggers.add_effect_modify_res(
             rts.init, 1300, util_triggers.ACC_ATTR_STONE)
 
-        p3_units = util_units.get_units_array(self._scn, 3)
-        units_in_area = util_units.units_in_area(p3_units, 0.0, 0.0, 80.0, 80.0)
-        flags = [
-            flag_a
-            for flag_a in units_in_area
-            if util_units.get_unit_constant(flag_a) == FLAG_A_UCONST
-        ]
+        player_flags = defaultdict(set)
+        for p in (Player.ONE, Player.TWO):
+            for unit in umgr.get_units_in_area(0.0, 0.0, 80.0, 80.0,
+                                               players=[p]):
+                if unit.unit_id == FLAG_A_UCONST:
+                    player_flags[p].add(unit)
+                util_units.remove(self._scn, unit, p)
+                x, y = int(unit.x), int(unit.y)
+
+                create = rts.init.add_effect(effects.create_object)
+                create.object_list_unit_id = unit.unit_id
+                create.player_source = p.value
+                create.facet = util_units.rad_to_facet(unit.rotation)
+                create.location_x, create.location_y = x, y
+
+                to0 = rts.init.add_effect(effects.change_ownership)
+                to0.player_source = p.value
+                to0.player_target = Player.GAIA.value
+                to0.object_list_unit_id = unit.unit_id
+                to0.area_1_x, to0.area_1_y = x, y
+                to0.area_2_x, to0.area_2_y = x, y
+
+                top = rts.begin.add_effect(effects.change_ownership)
+                top.player_source = Player.GAIA.value
+                top.player_target = p.value
+                top.object_list_unit_id = unit.unit_id
+                top.area_1_x, top.area_1_y = x, y
+                top.area_2_x, top.area_2_y = x, y
+
         flag_positions = [
-            (util_units.get_x(flag_a), util_units.get_y(flag_a))
-            for flag_a in flags
+            (flag.x, flag.y)
+            for flag in player_flags[Player.ONE] | player_flags[Player.TWO]
         ]
         # The min and max positions in which the Castle can be constructed.
         x1, y1 = (math.floor(pos) for pos in util.min_point(flag_positions))
@@ -2851,23 +2840,7 @@ class ScnData:
         x2 -= 3
         y2 -= 3
 
-        # Begin changes ownership.
-        p3_units = util_units.get_units_array(self._scn, 3)
-        daut_units = util_units.units_in_area(p3_units, 0.0, 0.0, 80.0, 80.0)
-        for unit in daut_units:
-            if util_units.get_unit_constant(unit) == FLAG_A_UCONST:
-                continue
-            pos = util_units.get_x(unit) + util_units.get_y(unit)
-            player_target = 1 if pos < 80.0 else 2
-            util_triggers.add_effect_change_own_unit(
-                rts.begin, 3, player_target, util_units.get_id(unit))
-        for k, flag_uids in enumerate((DC_FLAGS_P1, DC_FLAGS_P2)):
-            player_target = k + 1
-            for uid in flag_uids:
-                util_triggers.add_effect_change_own_unit(
-                    rts.begin, 3, player_target, uid)
-
-        # p1 constructs castle
+        # P1 constructs castle
         p1_builds_castle = self._add_trigger(p1_builds_castle_name)
         p1_builds_castle.enabled = False
         self._add_activate(rts.names.begin, p1_builds_castle_name)
@@ -2880,8 +2853,13 @@ class ScnData:
         self._add_deactivate(p1_builds_castle_name, p1_loses_army_name)
         self._add_deactivate(p1_builds_castle_name, p2_builds_castle_name)
         self._add_deactivate(p1_builds_castle_name, p2_loses_army_name)
+        p1_castle_var = p1_builds_castle.add_effect(effects.change_variable)
+        p1_castle_var.quantity = 1
+        p1_castle_var.operation = ChangeVarOp.set_op.value
+        p1_castle_var.from_variable = self._var_ids['p1-castle-constructed']
+        p1_castle_var.message = 'p1-castle-constructed'
 
-        # p2 loses army
+        # P2 loses army
         p2_loses_army = self._add_trigger(p2_loses_army_name)
         p2_loses_army.enabled = False
         self._add_activate(rts.names.begin, p2_loses_army_name)
@@ -2891,10 +2869,10 @@ class ScnData:
         self._add_deactivate(p2_loses_army_name, p1_loses_army_name)
         self._add_deactivate(p2_loses_army_name, p2_builds_castle_name)
 
-        # p1 wins
+        # P1 wins
         self._add_effect_p1_score(rts.p1_wins, event.MAX_POINTS)
 
-        # p2 constructs castle
+        # P2 constructs castle
         p2_builds_castle = self._add_trigger(p2_builds_castle_name)
         p2_builds_castle.enabled = False
         self._add_activate(rts.names.begin, p2_builds_castle_name)
@@ -2907,8 +2885,13 @@ class ScnData:
         self._add_deactivate(p2_builds_castle_name, p2_loses_army_name)
         self._add_deactivate(p2_builds_castle_name, p1_builds_castle_name)
         self._add_deactivate(p2_builds_castle_name, p1_loses_army_name)
+        p2_castle_var = p2_builds_castle.add_effect(effects.change_variable)
+        p2_castle_var.quantity = 1
+        p2_castle_var.operation = ChangeVarOp.set_op.value
+        p2_castle_var.from_variable = self._var_ids['p2-castle-constructed']
+        p2_castle_var.message = 'p2-castle-constructed'
 
-        # p1 loses army
+        # P1 loses army
         p1_loses_army = self._add_trigger(p1_loses_army_name)
         p1_loses_army.enabled = False
         self._add_activate(rts.names.begin, p1_loses_army_name)
@@ -2918,15 +2901,15 @@ class ScnData:
         self._add_deactivate(p1_loses_army_name, p2_loses_army_name)
         self._add_deactivate(p1_loses_army_name, p1_builds_castle_name)
 
-        # p2 wins
+        # P2 wins
         self._add_effect_p2_score(rts.p2_wins, event.MAX_POINTS)
 
         # Cleanup removes units from player control.
-        for player in (1, 2):
+        for p in (Player.ONE, Player.TWO):
             change_to_0 = rts.cleanup.add_effect(effects.change_ownership)
-            change_to_0.player_source = player
-            change_to_0.player_target = 0
-            # Don't include (0, 0), since p1's Invisible Object is there.
+            change_to_0.player_source = p.value
+            change_to_0.player_target = Player.GAIA.value
+            # Don't include (0, 0), since P1's Invisible Object is there.
             util_triggers.set_effect_area(change_to_0, 1, 1, 79, 79)
 
         # Removes stone after round is over
