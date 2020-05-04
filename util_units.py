@@ -256,20 +256,18 @@ def rad_to_facet(theta: float) -> int:
 
     Raises a ValueError if theta is not in the interval [0, 2pi).
     """
-    # TODO ok, actually need to figure out how the facets work...
     if theta < 0.0 or theta >= math.tau:
         raise ValueError(f'{theta} is not in [0, 2pi).')
-    return (round(16 * theta / math.tau) - 2) % 16
+    return round(16.0 * (theta - math.tau / 8.0) / math.tau) % 16
 
 
-def facet_to_rad(facet: int) -> float:
+def rad_to_facet_treb(theta: float) -> int:
     """
-    Returns the float value in [0, 2pi) representing the radian angle
-    at which a unit with the given facet is facing.
+    Returns a Facet value in {0, 1, ..., 31} representing the facing
+    of a Packed Trebuchet with facing value theta.
 
-    Raises a ValueError if facet is not between 0 and 15, inclusive.
+    Raises a ValueError if theta is not in the interval [0, 2pi).
     """
-    if facet < 0 or facet > 15:
-        raise ValueError(f'{facet} is not between 0 and 15, inclusive.')
-    # TODO facets don't correspond to radians like this...
-    return facet * math.tau / 16.0
+    if theta < 0.0 or theta >= math.tau:
+        raise ValueError(f'{theta} is not in [0, 2pi).')
+    return round(32.0 * (theta - math.tau / 8.0) / math.tau) % 32

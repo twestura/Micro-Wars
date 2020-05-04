@@ -798,7 +798,13 @@ class ScnData:
         create = rts.init.add_effect(effects.create_object)
         create.object_list_unit_id = unit.unit_id
         create.player_source = p.value
-        create.facet = util_units.rad_to_facet(unit.rotation)
+        if unit.unit_id == units.trebuchet_packed:
+            create.facet = util_units.rad_to_facet_treb(unit.rotation)
+        elif unit.unit_id == buildings.stone_wall:
+            # TODO update for stone walls
+            create.facet = util_units.rad_to_facet(unit.rotation)
+        else:
+            create.facet = util_units.rad_to_facet(unit.rotation)
         create.location_x, create.location_y = x, y
 
         to0 = rts.init.add_effect(effects.change_ownership)
