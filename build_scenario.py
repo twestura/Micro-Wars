@@ -2170,7 +2170,6 @@ class ScnData:
                     util_triggers.ACC_ATTR_GOLD, util_triggers.ACC_ATTR_STONE):
             util_triggers.add_effect_modify_res(rts.cleanup, 0, res)
 
-
     def _add_galley_micro(self, index: int) -> None:
         """
         Adds the Galley Micro minigame at the given index.
@@ -2187,40 +2186,30 @@ class ScnData:
         util_triggers.add_cond_pop0(rts.p2_wins, 1)
 
         prefix = f'[R{index}]'
-        player_galleys = {
-            1: umgr.get_units_in_area(80.0, 160.0, 160.0, 240.0,
-                                      players=[Player.ONE]),
-            2: umgr.get_units_in_area(80.0, 160.0, 160.0, 240.0,
-                                      players=[Player.TWO]),
-        }
-        for p, galleys in player_galleys.items():
-            for galley in galleys:
-                uid = galley.reference_id
-                galley.unit_id = UCONST_INVISIBLE_OBJECT
-
-                replace = rts.init.add_effect(effects.replace_object)
-                replace.number_of_units_selected = 1
-                replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
-                replace.player_source = p
-                replace.player_target = p
-                replace.object_list_unit_id_2 = units.galley
-                replace.selected_object_id = uid
-                util_triggers.add_effect_change_own_unit(rts.init, p, 0, uid)
-                util_triggers.add_effect_change_own_unit(rts.begin, 0, p, uid)
-
-                change_pts_name = f'{prefix} P{p} loses Galley ({uid})'
-                change_pts = self._add_trigger(change_pts_name)
-                change_pts.enabled = False
-                self._add_activate(rts.names.begin, change_pts_name)
-                util_triggers.add_cond_hp0(change_pts, uid)
-                if p == 1:
-                    self._add_effect_p2_score(change_pts, 10)
-                    self._add_deactivate(rts.names.p1_wins, change_pts_name)
-                else:
-                    self._add_effect_p1_score(change_pts, 10)
-                    self._add_deactivate(rts.names.p2_wins, change_pts_name)
-
-                util_triggers.add_effect_remove_obj(rts.cleanup, uid, p)
+        for p in (Player.ONE, Player.TWO):
+            galleys = umgr.get_units_in_area(80.0, 160.0, 160.0, 240.0,
+                                             players=[p])
+            for g in galleys:
+                self._create_unit_sequence(p, g, rts, False)
+            ngalleys = len(galleys)
+            for k in range(ngalleys):
+                pts_name = f'{prefix} P{p.value} Galley {k}'
+                pts = self._add_trigger(pts_name)
+                pts.enabled = False
+                obj_in_area = pts.add_condition(conditions.object_in_area)
+                obj_in_area.inverted = True
+                util_triggers.set_cond_area(obj_in_area, 80, 160, 159, 239)
+                obj_in_area.amount_or_quantity = k + 1
+                obj_in_area.player = p.value
+                obj_in_area.object_list = units.galley
+                self._add_activate(rts.names.begin, pts_name)
+                self._add_deactivate(
+                    rts.names.p1_wins if p == Player.ONE else rts.names.p2_wins,
+                    pts_name)
+                self._add_effect_score(
+                    pts,
+                    Player.TWO if p == Player.ONE else Player.ONE,
+                    event.MAX_POINTS // ngalleys)
 
         self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
         self._add_deactivate(rts.names.p2_wins, rts.names.p1_wins)
