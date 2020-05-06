@@ -2210,6 +2210,10 @@ class ScnData:
                     pts,
                     Player.TWO if p == Player.ONE else Player.ONE,
                     event.MAX_POINTS // ngalleys)
+                remove = rts.cleanup.add_effect(effects.remove_object)
+                remove.object_list_unit_id = units.galley
+                remove.player_source = p.value
+                util_triggers.set_effect_area(remove, 80, 160, 159, 239)
 
         self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
         self._add_deactivate(rts.names.p2_wins, rts.names.p1_wins)
