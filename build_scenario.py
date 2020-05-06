@@ -30,7 +30,7 @@ GNU General Public License v3.0: See the LICENSE file.
 
 
 import argparse
-from collections import defaultdict
+from collections import Counter, defaultdict
 import math
 from typing import Dict, List, Set, Tuple
 from bidict import bidict
@@ -767,10 +767,11 @@ class ScnData:
             raise ValueError(f'{player} is not Player 1 or Player 2.')
 
     def _create_unit_sequence(self, p: Player, unit: UnitStruct,
-                              rts: _RoundTriggers) -> None:
+                              rts: _RoundTriggers, remove=True) -> None:
         """
-        Removes unit from player p and replaces it with a sequence of trigger
-        effects.
+        Adds a sequence of effects to create the given unit for player p.
+        If remove is True, then also removes the unit from p's list of units,
+        leaving only the trigger to create it.
 
         Adds create unit and change ownership effects to rts.init to create
         the unit for the given player, then change it's ownership immediately
@@ -780,8 +781,12 @@ class ScnData:
 
         Adds a change ownership effect to rts.begin to change the ownership of
         the unit to player p.
+
+        Raises a ValueError if remove is True and player p does not already
+        have the unit.
         """
-        util_units.remove(self._scn, unit, p)
+        if remove:
+            util_units.remove(self._scn, unit, p)
         x, y = int(unit.x), int(unit.y)
 
         create = rts.init.add_effect(effects.create_object)
@@ -3117,74 +3122,55 @@ class ScnData:
 
         self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
         self._add_effect_p1_score(rts.p1_wins, self._events[index].p1_bonus)
-        util_triggers.add_cond_pop0(rts.p1_wins, 2)
+        util_triggers.add_cond_pop0(rts.p1_wins, Player.TWO.value)
 
         self._add_deactivate(rts.names.p2_wins, rts.names.p1_wins)
         self._add_effect_p2_score(rts.p2_wins, self._events[index].p2_bonus)
-        util_triggers.add_cond_pop0(rts.p2_wins, 1)
+        util_triggers.add_cond_pop0(rts.p2_wins, Player.ONE.value)
 
-        for unit in f.p1_units:
-            self._add_fight_unit(index, unit, 1, rts)
-        for unit in f.p2_units:
-            self._add_fight_unit(index, unit, 2, rts)
+        for p, ulst in ((Player.ONE, f.p1_units), (Player.TWO, f.p2_units)):
+            self._add_fight_units(rts, index, p, ulst)
 
-    def _add_fight_unit(self, fight_index: int, unit: UnitStruct,
-                        from_player: int, rts: _RoundTriggers) -> None:
+    def _add_fight_units(self, rts: _RoundTriggers, index: int, p: Player,
+                         ulst: List[UnitStruct]) -> None:
         """
-        Adds the unit from player `from_player` to the scenario.
-        `fight_index` is the index of the fight in which the unit participates.
-        Checks that from_player is 1 or 2.
+        Adds the units from the player's unit list to the scenario.
+        `index` is the index of the fight in which the units participate.
+        Checks that p is Player.ONE or Player.TWO.
         """
-        assert from_player in (1, 2)
-
-
-        # The Replace Object triggers create Onagers and Siege Onagers with
-        # buggy projectiles.
-        is_onager = unit.unit_id in (
-            units.mangonel, units.onager, units.siege_onager
-        )
-        storage_player = 0 if is_onager else from_player
-
-        u = util_units.copy_unit(self._scn, unit, storage_player)
-        uconst = u.unit_id
-        if not is_onager:
-            u.unit_id = UCONST_INVISIBLE_OBJECT
-        uid = u.reference_id
-        u.x = 237 if from_player == 1 else 239
-        u.y = 0 if from_player == 1 else 2
-
-        util_triggers.add_effect_teleport(
-            rts.init, uid, int(unit.x), int(unit.y), storage_player)
-        if not is_onager:
-            replace = rts.init.add_effect(effects.replace_object)
-            replace.number_of_units_selected = 1
-            replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
-            replace.player_source = from_player
-            replace.player_target = from_player
-            replace.object_list_unit_id_2 = uconst
-            replace.selected_object_id = uid
-        util_triggers.add_effect_change_own_unit(rts.init, from_player, 0, uid)
-
-        # # Begin handles ownership changes.
-        util_triggers.add_effect_change_own_unit(rts.begin, 0, from_player, uid)
-
-        # Changes points (using the player number).
-        unit_name = util_units.get_name(unit)
-        pts = self._events[fight_index].points[unit_name]
-        prefix = f'[R{fight_index}]' if fight_index else '[T]'
-        pretty_name = util.pretty_print_name(unit_name)
-        change_pts_name = f'{prefix} P{from_player} loses {pretty_name} ({uid})'
-        change_pts = self._add_trigger(change_pts_name)
-        change_pts.enabled = False
-        self._add_activate(rts.names.begin, change_pts_name)
-        util_triggers.add_cond_hp0(change_pts, uid)
-        if from_player == 1:
-            self._add_effect_p2_score(change_pts, pts)
-            self._add_deactivate(rts.names.p1_wins, change_pts_name)
-        else:
-            self._add_effect_p1_score(change_pts, pts)
-            self._add_deactivate(rts.names.p2_wins, change_pts_name)
-        util_triggers.add_effect_remove_obj(rts.cleanup, uid, from_player)
+        assert p in (Player.ONE, Player.TWO)
+        prefix = f'[R{index}]' if index else '[T]' # Index 0 is the Tiebreaker.
+        for u in ulst:
+            self._create_unit_sequence(p, u, rts, False)
+        ucnts = Counter(u.unit_id for u in ulst)
+        for uconst, cnt in ucnts.items():
+            uname = units.unit_names[uconst]
+            for k in range(cnt):
+                pts_name = (
+                    f'{prefix} P{p.value} {util.pretty_print_name(uname)} {k}'
+                )
+                pts = self._add_trigger(pts_name)
+                pts.enabled = False
+                obj_in_area = pts.add_condition(conditions.object_in_area)
+                obj_in_area.inverted = True
+                util_triggers.set_cond_area(obj_in_area, 80, 80, 159, 159)
+                obj_in_area.amount_or_quantity = k + 1
+                obj_in_area.player = p.value
+                obj_in_area.object_list = uconst
+                self._add_activate(rts.names.begin, pts_name)
+                self._add_deactivate(
+                    rts.names.p1_wins if p == Player.ONE else rts.names.p2_wins,
+                    pts_name)
+                self._add_effect_score(
+                    pts,
+                    Player.TWO if p == Player.ONE else Player.ONE,
+                    self._events[index].points[uname])
+        uconsts = {u.unit_id for u in ulst}
+        for uconst in uconsts:
+            remove = rts.cleanup.add_effect(effects.remove_object)
+            remove.object_list_unit_id = uconst
+            remove.player_source = p.value
+            util_triggers.set_effect_area(remove, 80, 80, 159, 159)
 
 
 def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
