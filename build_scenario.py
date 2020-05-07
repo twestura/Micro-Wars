@@ -35,6 +35,8 @@ import math
 from typing import Dict, List, Set, Tuple
 from bidict import bidict
 from AoE2ScenarioParser.aoe2_scenario import AoE2Scenario
+from AoE2ScenarioParser.objects.condition_obj import ConditionObject
+from AoE2ScenarioParser.objects.effect_obj import EffectObject
 from AoE2ScenarioParser.objects.trigger_obj import TriggerObject
 from AoE2ScenarioParser.pieces.structs.unit import UnitStruct
 from AoE2ScenarioParser.pieces.structs.changed_variable import (
@@ -280,6 +282,14 @@ UCONST_SKIRM = 7
 
 # Unit constant for a Crossbowman.
 UCONST_XBOW = 24
+
+
+# Int value for pierce attack and armor classes.
+CLASS_PIERCE = 3
+
+
+# Int value for melee attack and armor classes.
+CLASS_MELEE = 4
 
 
 # Unit constant for a Monk.
@@ -766,30 +776,23 @@ class ScnData:
         else:
             raise ValueError(f'{player} is not Player 1 or Player 2.')
 
-    def _create_unit_sequence(self, p: Player, unit: UnitStruct,
-                              rts: _RoundTriggers, remove=True) -> None:
+    def _create_unit_sequence_explicit(
+            self, p: Player, unit: UnitStruct, init: TriggerObject,
+            begin: TriggerObject, remove=True, change_armor=False) -> None:
         """
-        Adds a sequence of effects to create the given unit for player p.
-        If remove is True, then also removes the unit from p's list of units,
-        leaving only the trigger to create it.
+        Same as _create_unit_sequence, but allows for manual specification
+        of the init and begin triggers, rather than using a _RoundTriggers
+        object. See that method's specification for details.
 
-        Adds create unit and change ownership effects to rts.init to create
-        the unit for the given player, then change it's ownership immediately
-        to the Gaia player. The ownership change is necessary, as the
-        Map Revealers would change the ownership of the unit were it first
-        created as Gaia.
-
-        Adds a change ownership effect to rts.begin to change the ownership of
-        the unit to player p.
-
-        Raises a ValueError if remove is True and player p does not already
-        have the unit.
+        There's a change_armor parameter, used specifically for
+        the Xbow Timer minigame. This parameter creates skirmishers
+        with +1 to their melee and pierce armors.
         """
         if remove:
             util_units.remove(self._scn, unit, p)
         x, y = int(unit.x), int(unit.y)
 
-        create = rts.init.add_effect(effects.create_object)
+        create = init.add_effect(effects.create_object)
         create.object_list_unit_id = unit.unit_id
         create.player_source = p.value
         if unit.unit_id == units.trebuchet_packed:
@@ -812,19 +815,50 @@ class ScnData:
             create.facet = util_units.rad_to_facet(unit.rotation)
         create.location_x, create.location_y = x, y
 
-        to0 = rts.init.add_effect(effects.change_ownership)
+        if change_armor:
+            for armor in (CLASS_MELEE, CLASS_PIERCE):
+                change = init.add_effect(effects.change_object_armor)
+                change.aa_quantity = 1
+                change.aa_armor_or_attack_type = armor
+                change.player_source = p.value
+                change.operation = ChangeVarOp.add.value
+                util_triggers.set_effect_area(change, 0, 160, 79, 239)
+
+        to0 = init.add_effect(effects.change_ownership)
         to0.player_source = p.value
         to0.player_target = Player.GAIA.value
         to0.object_list_unit_id = unit.unit_id
         to0.area_1_x, to0.area_1_y = x, y
         to0.area_2_x, to0.area_2_y = x, y
 
-        top = rts.begin.add_effect(effects.change_ownership)
+        top = begin.add_effect(effects.change_ownership)
         top.player_source = Player.GAIA.value
         top.player_target = p.value
         top.object_list_unit_id = unit.unit_id
         top.area_1_x, top.area_1_y = x, y
         top.area_2_x, top.area_2_y = x, y
+
+    def _create_unit_sequence(self, p: Player, unit: UnitStruct,
+                              rts: _RoundTriggers, remove=True) -> None:
+        """
+        Adds a sequence of effects to create the given unit for player p.
+        If remove is True, then also removes the unit from p's list of units,
+        leaving only the trigger to create it.
+
+        Adds create unit and change ownership effects to rts.init to create
+        the unit for the given player, then change it's ownership immediately
+        to the Gaia player. The ownership change is necessary, as the
+        Map Revealers would change the ownership of the unit were it first
+        created as Gaia.
+
+        Adds a change ownership effect to rts.begin to change the ownership of
+        the unit to player p.
+
+        Raises a ValueError if remove is True and player p does not already
+        have the unit.
+        """
+        self._create_unit_sequence_explicit(
+            p, unit, rts.init, rts.begin, remove)
 
     def _add_effect_research_tech(self, trigger: TriggerObject,
                                   tech_name: str) -> None:
@@ -2238,6 +2272,11 @@ class ScnData:
 
         res_xbow_1_name = f'{prefix} Xbow Timer Research Player 1'
         res_xbow_2_name = f'{prefix} Xbow Timer Research Player 2'
+        x1, y1, x2, y2 = 0, 160, 79, 239
+        def set_condition_area(condition: ConditionObject):
+            util_triggers.set_cond_area(condition, x1, y1, x2, y2)
+        def set_effect_area(effect: EffectObject):
+            util_triggers.set_effect_area(effect, x1, y1, x2, y2)
 
         timer_r1 = rts.begin.add_effect(effects.display_timer)
         timer_r1.variable_or_timer = 0
@@ -2249,42 +2288,42 @@ class ScnData:
         util_triggers.add_cond_timer(res_xbow_1, 60)
         self._add_activate(rts.names.begin, res_xbow_1_name)
         xbow1 = res_xbow_1.add_effect(effects.replace_object)
-        xbow1.player_source = 1
-        xbow1.player_target = 1
-        xbow1.object_list_unit_id = UCONST_ARCHER
-        xbow1.object_list_unit_id_2 = UCONST_XBOW
-        util_triggers.set_effect_area(xbow1, 0, 160, 79, 239)
+        xbow1.player_source = Player.ONE.value
+        xbow1.player_target = Player.ONE.value
+        xbow1.object_list_unit_id = units.archer
+        xbow1.object_list_unit_id_2 = units.crossbowman
+        set_effect_area(xbow1)
         bodkin1_attack = res_xbow_1.add_effect(effects.change_object_attack)
         bodkin1_attack.aa_quantity = 1
-        bodkin1_attack.aa_armor_or_attack_type = 3
+        bodkin1_attack.aa_armor_or_attack_type = CLASS_PIERCE
         bodkin1_attack.player_source = 1
-        bodkin1_attack.object_list_unit_id = UCONST_XBOW
+        bodkin1_attack.object_list_unit_id = units.crossbowman
         bodkin1_attack.operation = util_triggers.ChangeVarOp.add.value
-        util_triggers.set_effect_area(bodkin1_attack, 0, 160, 79, 239)
+        set_effect_area(bodkin1_attack)
         bodkin1_range = res_xbow_1.add_effect(effects.change_object_range)
         bodkin1_range.quantity = 1
         bodkin1_range.player_source = 1
-        bodkin1_range.object_list_unit_id = UCONST_XBOW
+        bodkin1_range.object_list_unit_id = units.archer
         bodkin1_range.operation = util_triggers.ChangeVarOp.add.value
-        util_triggers.set_effect_area(bodkin1_range, 0, 160, 79, 239)
+        set_effect_area(bodkin1_range)
 
         cleanup1 = self._add_trigger(cleanup1_name)
         cleanup1.enabled = False
         util_triggers.add_cond_timer(cleanup1, DELAY_CLEANUP)
         for clean in (cleanup1, rts.cleanup):
-            for player in (1, 2):
+            for p in (Player.ONE, Player.TWO):
                 clean_a = clean.add_effect(effects.remove_object)
-                clean_a.player_source = player
-                clean_a.object_list_unit_id = UCONST_ARCHER
-                util_triggers.set_effect_area(clean_a, 0, 160, 79, 239)
+                clean_a.player_source = p.value
+                clean_a.object_list_unit_id = units.archer
+                set_effect_area(clean_a)
                 clean_c = clean.add_effect(effects.remove_object)
-                clean_c.player_source = player
-                clean_c.object_list_unit_id = UCONST_XBOW
-                util_triggers.set_effect_area(clean_c, 0, 160, 79, 239)
+                clean_c.player_source = p.value
+                clean_c.object_list_unit_id = units.crossbowman
+                set_effect_area(clean_c)
                 clean_s = clean.add_effect(effects.remove_object)
-                clean_s.player_source = player
-                clean_s.object_list_unit_id = UCONST_SKIRM
-                util_triggers.set_effect_area(clean_s, 0, 160, 79, 239)
+                clean_s.player_source = p.value
+                clean_s.object_list_unit_id = units.skirmisher
+                set_effect_area(clean_s)
         self._add_activate(cleanup1_name, init2_name)
 
         init2 = self._add_trigger(init2_name)
@@ -2298,17 +2337,19 @@ class ScnData:
         self._add_activate(begin2_name, rts.names.p1_wins)
         self._add_activate(begin2_name, rts.names.p2_wins)
 
-        archers = util_units.get_units_array(self._xbow_scn, 1)
-        archers = util_units.units_in_area(archers, 0.0, 80.0, 160.0, 240.0)
-        skirms = util_units.get_units_array(self._xbow_scn, 2)
-        skirms = util_units.units_in_area(skirms, 0.0, 80.0, 160.0, 240.0)
+        umgr_temp = self._xbow_scn.object_manager.unit_manager
+        archers = umgr_temp.get_units_in_area(0.0, 80.0, 160.0, 240.0,
+                                              players=[Player.ONE])
+        skirms = umgr_temp.get_units_in_area(0.0, 80.0, 160.0, 240.0,
+                                             players=[Player.TWO])
 
         p1_r1_win = self._add_trigger(p1_r1_win_name)
         p1_r1_win.enabled = False
         self._add_activate(rts.names.begin, p1_r1_win_name)
         self._add_deactivate(p2_r1_win_name, p1_r1_win_name)
-        util_triggers.add_cond_pop0(p1_r1_win, 2)
-        self._add_effect_p1_score(p1_r1_win, 50 - len(skirms))
+        util_triggers.add_cond_pop0(p1_r1_win, Player.TWO.value)
+        self._add_effect_p1_score(p1_r1_win,
+                                  event.MAX_POINTS // 2 - len(skirms))
         self._add_activate(p1_r1_win_name, cleanup1_name)
         clear_timer_p1_r1 = p1_r1_win.add_effect(effects.clear_timer)
         clear_timer_p1_r1.variable_or_timer = 0
@@ -2318,154 +2359,84 @@ class ScnData:
         p2_r1_win.enabled = False
         self._add_activate(rts.names.begin, p2_r1_win_name)
         self._add_deactivate(p1_r1_win_name, p2_r1_win_name)
-        util_triggers.add_cond_pop0(p2_r1_win, 1)
-        self._add_effect_p2_score(p2_r1_win, 50 - len(archers))
+        util_triggers.add_cond_pop0(p2_r1_win, Player.ONE.value)
+        self._add_effect_p2_score(p2_r1_win,
+                                  event.MAX_POINTS // 2 - len(archers))
         self._add_activate(p2_r1_win_name, cleanup1_name)
         clear_timer_p2_r1 = p2_r1_win.add_effect(effects.clear_timer)
         clear_timer_p2_r1.variable_or_timer = 0
         self._add_deactivate(p2_r1_win_name, res_xbow_1_name)
 
         # Round 1
-        for unit in archers:
-            archer = util_units.copy_unit(self._scn, unit, Player.ONE.value)
-            archer.unit_id = UCONST_INVISIBLE_OBJECT
-            uid = util_units.get_id(archer)
+        for archer in archers:
+            self._create_unit_sequence(Player.ONE, archer, rts, False)
+        for k in range(len(archers)):
+            pts_name = f'{prefix} P{Player.ONE.value} Archer {k}'
+            pts = self._add_trigger(pts_name)
+            pts.enabled = False
+            for uconst in (units.archer, units.crossbowman):
+                obj_in_area = pts.add_condition(conditions.object_in_area)
+                obj_in_area.inverted = True
+                set_condition_area(obj_in_area)
+                obj_in_area.amount_or_quantity = k + 1
+                obj_in_area.player = Player.ONE.value
+                obj_in_area.object_list = uconst
+            self._add_activate(rts.names.begin, pts_name)
+            self._add_deactivate(p1_r1_win_name, pts_name)
+            self._add_effect_p2_score(pts, 1)
 
-            util_triggers.add_effect_teleport(
-                rts.init, uid, int(archer.x), int(archer.y), Player.ONE.value)
-            archer.x, archer.y = 237, 0
-            replace = rts.init.add_effect(effects.replace_object)
-            replace.number_of_units_selected = 1
-            replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
-            replace.player_source = Player.ONE.value
-            replace.player_target = Player.ONE.value
-            replace.object_list_unit_id_2 = UCONST_ARCHER
-            replace.selected_object_id = uid
-            util_triggers.add_effect_change_own_unit(
-                rts.init, Player.ONE.value, Player.GAIA.value, uid)
-
-            util_triggers.add_effect_change_own_unit(
-                rts.begin, Player.GAIA.value, Player.ONE.value, uid)
-
-            change_pts_name = f'{prefix} P1 loses Archer ({uid})'
-            change_pts = self._add_trigger(change_pts_name)
-            change_pts.enabled = False
-            self._add_activate(rts.names.begin, change_pts_name)
-            util_triggers.add_cond_destroy_obj(change_pts, uid)
-            self._add_deactivate(cleanup1_name, change_pts_name)
-            self._add_effect_p2_score(change_pts, 1)
-
-        for unit in skirms:
-            skirm = util_units.copy_unit(self._scn, unit, Player.TWO.value)
-            skirm.unit_id = UCONST_INVISIBLE_OBJECT
-            uid = util_units.get_id(skirm)
-
-            util_triggers.add_effect_teleport(
-                rts.init, uid, int(skirm.x), int(skirm.y), Player.TWO.value)
-            skirm.x, skirm.y = 239, 2
-            replace = rts.init.add_effect(effects.replace_object)
-            replace.number_of_units_selected = 1
-            replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
-            replace.player_source = Player.TWO.value
-            replace.player_target = Player.TWO.value
-            replace.object_list_unit_id_2 = UCONST_SKIRM
-            replace.selected_object_id = uid
-            skirm_pa = rts.init.add_effect(effects.change_object_armor)
-            skirm_pa.aa_quantity = 1
-            skirm_pa.aa_armor_or_attack_type = 3
-            skirm_pa.number_of_units_selected = 1
-            skirm_pa.player_source = Player.TWO.value
-            skirm_pa.selected_object_id = uid
-            skirm_ma = rts.init.add_effect(effects.change_object_armor)
-            skirm_ma.aa_quantity = 1
-            skirm_ma.aa_armor_or_attack_type = 4
-            skirm_ma.number_of_units_selected = 1
-            skirm_ma.player_source = Player.TWO.value
-            skirm_ma.selected_object_id = uid
-            util_triggers.add_effect_change_own_unit(
-                rts.init, Player.TWO.value, Player.GAIA.value, uid)
-
-            util_triggers.add_effect_change_own_unit(
-                rts.begin, Player.GAIA.value, Player.TWO.value, uid)
-
-            change_pts_name = f'{prefix} P2 loses Skirmisher ({uid})'
-            change_pts = self._add_trigger(change_pts_name)
-            change_pts.enabled = False
-            self._add_activate(rts.names.begin, change_pts_name)
-            util_triggers.add_cond_destroy_obj(change_pts, uid)
-            self._add_deactivate(cleanup1_name, change_pts_name)
-            self._add_effect_p1_score(change_pts, 1)
+        for skirm in skirms:
+            self._create_unit_sequence_explicit(
+                Player.TWO, skirm, rts.init, rts.begin, False, True)
+        for k in range(len(skirms)):
+            pts_name = f'{prefix} P{Player.TWO.value} Skirm {k}'
+            pts = self._add_trigger(pts_name)
+            pts.enabled = False
+            obj_in_area = pts.add_condition(conditions.object_in_area)
+            obj_in_area.inverted = True
+            set_condition_area(obj_in_area)
+            obj_in_area.amount_or_quantity = k + 1
+            obj_in_area.player = Player.TWO.value
+            obj_in_area.object_list = units.skirmisher
+            self._add_activate(rts.names.begin, pts_name)
+            self._add_deactivate(p2_r1_win_name, pts_name)
+            self._add_effect_p1_score(pts, 1)
 
         # Round 2
-        for unit in archers:
-            archer = util_units.copy_unit(self._scn, unit, Player.TWO.value)
-            archer.unit_id = UCONST_INVISIBLE_OBJECT
-            uid = util_units.get_id(archer)
+        for archer in archers:
+            self._create_unit_sequence_explicit(
+                Player.TWO, archer, init2, begin2, False)
+        for k in range(len(archers)):
+            pts_name = f'{prefix} P{Player.TWO.value} Archer {k}'
+            pts = self._add_trigger(pts_name)
+            pts.enabled = False
+            for uconst in (units.archer, units.crossbowman):
+                obj_in_area = pts.add_condition(conditions.object_in_area)
+                obj_in_area.inverted = True
+                set_condition_area(obj_in_area)
+                obj_in_area.amount_or_quantity = k + 1
+                obj_in_area.player = Player.TWO.value
+                obj_in_area.object_list = uconst
+            self._add_activate(begin2_name, pts_name)
+            self._add_deactivate(rts.names.p2_wins, pts_name)
+            self._add_effect_p1_score(pts, 1)
 
-            util_triggers.add_effect_teleport(
-                init2, uid, int(archer.x), int(archer.y), Player.TWO.value)
-            skirm.x, skirm.y = 239, 2
-            replace = init2.add_effect(effects.replace_object)
-            replace.number_of_units_selected = 1
-            replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
-            replace.player_source = Player.TWO.value
-            replace.player_target = Player.TWO.value
-            replace.object_list_unit_id_2 = UCONST_ARCHER
-            replace.selected_object_id = uid
-            util_triggers.add_effect_change_own_unit(
-                init2, Player.TWO.value, Player.GAIA.value, uid)
-
-            util_triggers.add_effect_change_own_unit(
-                begin2, Player.GAIA.value, Player.TWO.value, uid)
-
-            change_pts_name = f'{prefix} P2 loses Archer ({uid})'
-            change_pts = self._add_trigger(change_pts_name)
-            change_pts.enabled = False
-            self._add_activate(begin2_name, change_pts_name)
-            util_triggers.add_cond_destroy_obj(change_pts, uid)
-            self._add_deactivate(rts.names.p2_wins, change_pts_name)
-            self._add_effect_p1_score(change_pts, 1)
-
-        for unit in skirms:
-            skirm = util_units.copy_unit(self._scn, unit, Player.ONE.value)
-            skirm.unit_id = UCONST_INVISIBLE_OBJECT
-            uid = util_units.get_id(skirm)
-
-            util_triggers.add_effect_teleport(
-                init2, uid, int(skirm.x), int(skirm.y), Player.ONE.value)
-            skirm.x, skirm.y = 237, 0
-            replace = init2.add_effect(effects.replace_object)
-            replace.number_of_units_selected = 1
-            replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
-            replace.player_source = Player.ONE.value
-            replace.player_target = Player.ONE.value
-            replace.object_list_unit_id_2 = UCONST_SKIRM
-            replace.selected_object_id = uid
-            skirm_pa = init2.add_effect(effects.change_object_armor)
-            skirm_pa.aa_quantity = 1
-            skirm_pa.aa_armor_or_attack_type = 3
-            skirm_pa.number_of_units_selected = 1
-            skirm_pa.player_source = Player.ONE.value
-            skirm_pa.selected_object_id = uid
-            skirm_ma = init2.add_effect(effects.change_object_armor)
-            skirm_ma.aa_quantity = 1
-            skirm_ma.aa_armor_or_attack_type = 4
-            skirm_ma.number_of_units_selected = 1
-            skirm_ma.player_source = Player.ONE.value
-            skirm_ma.selected_object_id = uid
-            util_triggers.add_effect_change_own_unit(
-                init2, Player.ONE.value, Player.GAIA.value, uid)
-
-            util_triggers.add_effect_change_own_unit(
-                begin2, Player.GAIA.value, Player.ONE.value, uid)
-
-            change_pts_name = f'{prefix} P1 loses Skirmisher ({uid})'
-            change_pts = self._add_trigger(change_pts_name)
-            change_pts.enabled = False
-            self._add_activate(begin2_name, change_pts_name)
-            util_triggers.add_cond_destroy_obj(change_pts, uid)
-            self._add_deactivate(rts.names.p1_wins, change_pts_name)
-            self._add_effect_p2_score(change_pts, 1)
+        for skirm in skirms:
+            self._create_unit_sequence_explicit(
+                Player.ONE, skirm, init2, begin2, False, True)
+        for k in range(len(skirms)):
+            pts_name = f'{prefix} P{Player.ONE.value} Skirm {k}'
+            pts = self._add_trigger(pts_name)
+            pts.enabled = False
+            obj_in_area = pts.add_condition(conditions.object_in_area)
+            obj_in_area.inverted = True
+            set_condition_area(obj_in_area)
+            obj_in_area.amount_or_quantity = k + 1
+            obj_in_area.player = Player.ONE.value
+            obj_in_area.object_list = units.skirmisher
+            self._add_activate(begin2_name, pts_name)
+            self._add_deactivate(rts.names.p1_wins, pts_name)
+            self._add_effect_p2_score(pts, 1)
 
         timer_r2 = begin2.add_effect(effects.display_timer)
         timer_r2.variable_or_timer = 0
@@ -2477,37 +2448,39 @@ class ScnData:
         util_triggers.add_cond_timer(res_xbow_2, 60)
         self._add_activate(begin2_name, res_xbow_2_name)
         xbow2 = res_xbow_2.add_effect(effects.replace_object)
-        xbow2.player_source = 2
-        xbow2.player_target = 2
+        xbow2.player_source = Player.TWO.value
+        xbow2.player_target = Player.TWO.value
         xbow2.object_list_unit_id = UCONST_ARCHER
         xbow2.object_list_unit_id_2 = UCONST_XBOW
-        util_triggers.set_effect_area(xbow1, 0, 160, 79, 239)
+        set_effect_area(xbow1)
         bodkin2_attack = res_xbow_2.add_effect(effects.change_object_attack)
         bodkin2_attack.aa_quantity = 1
-        bodkin2_attack.aa_armor_or_attack_type = 3
+        bodkin2_attack.aa_armor_or_attack_type = CLASS_PIERCE
         bodkin2_attack.player_source = 2
         bodkin2_attack.object_list_unit_id = UCONST_XBOW
         bodkin2_attack.operation = util_triggers.ChangeVarOp.add.value
-        util_triggers.set_effect_area(bodkin1_attack, 0, 160, 79, 239)
+        set_effect_area(bodkin1_attack)
         bodkin2_range = res_xbow_2.add_effect(effects.change_object_range)
         bodkin2_range.quantity = 1
         bodkin2_range.player_source = 2
         bodkin2_range.object_list_unit_id = UCONST_XBOW
         bodkin2_range.operation = util_triggers.ChangeVarOp.add.value
-        util_triggers.set_effect_area(bodkin1_range, 0, 160, 79, 239)
+        set_effect_area(bodkin1_range)
 
         # Player 1 Wins Round 2
-        util_triggers.add_cond_pop0(rts.p1_wins, 2)
+        util_triggers.add_cond_pop0(rts.p1_wins, Player.TWO.value)
         self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
-        self._add_effect_p1_score(rts.p1_wins, 50 - len(archers))
+        self._add_effect_p1_score(rts.p1_wins,
+                                  event.MAX_POINTS // 2 - len(archers))
         clear_timer_p1_r2 = rts.p1_wins.add_effect(effects.clear_timer)
         clear_timer_p1_r2.variable_or_timer = 0
         self._add_deactivate(rts.names.p1_wins, res_xbow_2_name)
 
         # Player 2 Wins Round 2
-        util_triggers.add_cond_pop0(rts.p2_wins, 1)
+        util_triggers.add_cond_pop0(rts.p2_wins, Player.ONE.value)
         self._add_deactivate(rts.names.p2_wins, rts.names.p1_wins)
-        self._add_effect_p2_score(rts.p2_wins, 50 - len(skirms))
+        self._add_effect_p2_score(rts.p2_wins,
+                                  event.MAX_POINTS // 2 - len(skirms))
         clear_timer_p2_r2 = rts.p2_wins.add_effect(effects.clear_timer)
         clear_timer_p2_r2.variable_or_timer = 0
         self._add_deactivate(rts.names.p2_wins, res_xbow_2_name)
@@ -3043,10 +3016,10 @@ class ScnData:
                     # TODO debug when not all kills are counted when a king dies
                     # Perhaps base points based on population?
                     # Does this affect other fights as well?
-                    if p == Player.ONE:
-                        self._add_effect_p2_score(award_pts, 1)
-                    else:
-                        self._add_effect_p1_score(award_pts, 1)
+                    self._add_effect_score(
+                        award_pts,
+                        Player.TWO if p == Player.ONE else Player.ONE,
+                        1)
                 # Change the unit constant after using the unit's name.
                 unit.unit_id = UCONST_INVISIBLE_OBJECT
 
@@ -3063,6 +3036,7 @@ class ScnData:
                     rts.begin, Player.GAIA.value, p.value, uid)
 
         # Kills all of a player's unis when their King is killed.
+        # TODO kill all non map revealer units in the area
         for p, ulst in player_units.items():
             for unit in ulst:
                 king_death = kill_king_triggers[p]
@@ -3071,6 +3045,7 @@ class ScnData:
                 kill_unit.selected_object_id = unit.reference_id
                 kill_unit.player_source = p.value
 
+        # TODO rework stalemante
         stalemate_name = f'{prefix} Regicide Stalemate'
         stalemate = self._add_trigger(stalemate_name)
         stalemate.enabled = False
