@@ -2224,7 +2224,7 @@ class ScnData:
             galleys = umgr.get_units_in_area(80.0, 160.0, 160.0, 240.0,
                                              players=[p])
             for g in galleys:
-                self._create_unit_sequence(p, g, rts, False)
+                self._create_unit_sequence(p, g, rts)
             ngalleys = len(galleys)
             for k in range(ngalleys):
                 pts_name = f'{prefix} P{p.value} Galley {k}'
@@ -2978,6 +2978,8 @@ class ScnData:
         rts = _RoundTriggers(self, index)
         umgr = self._scn.object_manager.unit_manager
         prefix = f'[R{index}]' if index else '[T]'
+        # TODO allow for heroes other than Kings, e.g. Khan and Joan
+        # TODO get rid of stalemate
 
         player_units = {Player.ONE: [], Player.TWO: []}
         kill_king_triggers = dict()
@@ -2985,8 +2987,8 @@ class ScnData:
         for p in (Player.ONE, Player.TWO):
             # Leaves a small buffer to avoid selecting the units at the
             # very top of the map.
-            for unit in umgr.get_units_in_area(160.0, 5.0, 235.0, 80.0,
-                                               players=[p]):
+            ulst = umgr.get_units_in_area(160.0, 5.0, 235.0, 80.0, players=[p])
+            for unit in ulst:
                 uid = unit.reference_id
                 uconst = unit.unit_id
                 if uconst == units.king:
@@ -3046,25 +3048,25 @@ class ScnData:
                 kill_unit.player_source = p.value
 
         # TODO rework stalemante
-        stalemate_name = f'{prefix} Regicide Stalemate'
-        stalemate = self._add_trigger(stalemate_name)
-        stalemate.enabled = False
-        self._add_activate(rts.names.begin, stalemate_name)
-        self._add_activate(stalemate_name, rts.names.cleanup)
-        self._add_deactivate(stalemate_name, rts.names.p1_wins)
-        self._add_deactivate(stalemate_name, rts.names.p2_wins)
-        for p in (Player.ONE, Player.TWO):
-            pop1 = stalemate.add_condition(conditions.accumulate_attribute)
-            pop1.player = p.value
-            pop1.amount_or_quantity = 1
-            pop1.resource_type_or_tribute_list = (
-                util_triggers.ACC_ATTR_POP_HEADROOM)
-            popnot2 = stalemate.add_condition(conditions.accumulate_attribute)
-            popnot2.player = p.value
-            popnot2.amount_or_quantity = 2
-            popnot2.resource_type_or_tribute_list = (
-                util_triggers.ACC_ATTR_POP_HEADROOM)
-            popnot2.inverted = True
+        # stalemate_name = f'{prefix} Regicide Stalemate'
+        # stalemate = self._add_trigger(stalemate_name)
+        # stalemate.enabled = False
+        # self._add_activate(rts.names.begin, stalemate_name)
+        # self._add_activate(stalemate_name, rts.names.cleanup)
+        # self._add_deactivate(stalemate_name, rts.names.p1_wins)
+        # self._add_deactivate(stalemate_name, rts.names.p2_wins)
+        # for p in (Player.ONE, Player.TWO):
+        #     pop1 = stalemate.add_condition(conditions.accumulate_attribute)
+        #     pop1.player = p.value
+        #     pop1.amount_or_quantity = 1
+        #     pop1.resource_type_or_tribute_list = (
+        #         util_triggers.ACC_ATTR_POP_HEADROOM)
+        #     popnot2 = stalemate.add_condition(conditions.accumulate_attribute)
+        #     popnot2.player = p.value
+        #     popnot2.amount_or_quantity = 2
+        #     popnot2.resource_type_or_tribute_list = (
+        #         util_triggers.ACC_ATTR_POP_HEADROOM)
+        #     popnot2.inverted = True
 
         self._add_activate(rts.names.begin, rts.names.p1_wins)
         self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
