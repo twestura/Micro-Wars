@@ -345,10 +345,13 @@ UCONST_JOAN_OF_ARC = 629
 # TODO parse these two from the command line
 # Default hero to use for the Regicide minigame.
 REGICIDE_DEFAULT_HERO = units.king
+# REGICIDE_DEFAULT_HERO = UCONST_GENGHIS_KHAN
+# REGICIDE_DEFAULT_HERO = UCONST_JOAN_OF_ARC
 
 
 # Default value for whether to buff the stats of the Regicide hero.
 REGICIDE_DEFAULT_BUFF = False
+# REGICIDE_DEFAULT_BUFF = True
 
 
 # Center positions of minigames to be used when changing the view.
@@ -806,15 +809,17 @@ class ScnData:
 
     def _create_unit_sequence_explicit(
             self, p: Player, unit: UnitStruct, init: TriggerObject,
-            begin: TriggerObject, remove=True, change_armor=False) -> None:
+            begin: TriggerObject, remove=True,
+            buff=REGICIDE_DEFAULT_BUFF) -> None:
         """
         Same as _create_unit_sequence, but allows for manual specification
         of the init and begin triggers, rather than using a _RoundTriggers
         object. See that method's specification for details.
 
-        There's a change_armor parameter, used specifically for
-        the Xbow Timer minigame. This parameter creates skirmishers
-        with +1 to their melee and pierce armors.
+        There's a buff parameter, used specifically for
+        the Xbow Timer and regicide minigames. This parameter creates
+        skirmishers with +1 to their melee and pierce armors and hero
+        units with various bonus stats.
         """
         if remove:
             util_units.remove(self._scn, unit, p)
@@ -843,14 +848,26 @@ class ScnData:
             create.facet = util_units.rad_to_facet(unit.rotation)
         create.location_x, create.location_y = x, y
 
-        if change_armor:
-            for armor in (CLASS_MELEE, CLASS_PIERCE):
-                change = init.add_effect(effects.change_object_armor)
-                change.aa_quantity = 1
-                change.aa_armor_or_attack_type = armor
+        if buff:
+            if unit.unit_id == units.skirmisher:
+                for armor in (CLASS_MELEE, CLASS_PIERCE):
+                    change = init.add_effect(effects.change_object_armor)
+                    change.aa_quantity = 1
+                    change.aa_armor_or_attack_type = armor
+                    change.player_source = p.value
+                    change.operation = ChangeVarOp.add.value
+                    util_triggers.set_effect_area(change, 0, 160, 79, 239)
+            elif unit.unit_id == units.king:
+                change = init.add_effect(effects.change_object_hp)
+                change.quantity = 250
                 change.player_source = p.value
-                change.operation = ChangeVarOp.add.value
-                util_triggers.set_effect_area(change, 0, 160, 79, 239)
+                change.operation = ChangeVarOp.set_op.value
+                change.object_list_unit_id = units.king
+                util_triggers.set_effect_area(change, 160, 5, 235, 79)
+            elif unit.unit_id == UCONST_GENGHIS_KHAN:
+                pass # TODO test buff
+            elif unit.unit_id == UCONST_JOAN_OF_ARC:
+                pass # TODO test buff
 
         to0 = init.add_effect(effects.change_ownership)
         to0.player_source = p.value
@@ -867,7 +884,8 @@ class ScnData:
         top.area_2_x, top.area_2_y = x, y
 
     def _create_unit_sequence(self, p: Player, unit: UnitStruct,
-                              rts: _RoundTriggers, remove=True) -> None:
+                              rts: _RoundTriggers, remove=True,
+                              buff=REGICIDE_DEFAULT_BUFF) -> None:
         """
         Adds a sequence of effects to create the given unit for player p.
         If remove is True, then also removes the unit from p's list of units,
@@ -886,7 +904,7 @@ class ScnData:
         have the unit.
         """
         self._create_unit_sequence_explicit(
-            p, unit, rts.init, rts.begin, remove)
+            p, unit, rts.init, rts.begin, remove, buff)
 
     def _add_effect_research_tech(self, trigger: TriggerObject,
                                   tech_name: str) -> None:
@@ -3007,17 +3025,16 @@ class ScnData:
         umgr = self._scn.object_manager.unit_manager
         prefix = f'[R{index}]' if index else '[T]'
         stalemate_name = f'{prefix} Regicide Stalemate'
-        # TODO allow for buffing the heroes (prob change the create unit
-        # sequence to have a general "buff" parameter).
 
         for p in (Player.ONE, Player.TWO):
             # Leaves a small buffer to avoid selecting the units at the
             # very top of the map.
             ulst = umgr.get_units_in_area(160.0, 5.0, 235.0, 80.0, players=[p])
-            uconsts = {u.unit_id for u in ulst}
+            uconsts = ({u.unit_id for u in ulst}
+                       | {UCONST_GENGHIS_KHAN, UCONST_JOAN_OF_ARC})
             for unit in ulst:
-                self._create_unit_sequence(p, unit, rts)
-                if unit.unit_id == self._regicide_hero:
+                if unit.unit_id == units.king:
+                    unit.unit_id = self._regicide_hero
                     kill_hero_name = f"{prefix} Player {p.value}'s Hero Killed"
                     kill_hero = self._add_trigger(kill_hero_name)
                     kill_hero.enabled = False
@@ -3042,6 +3059,8 @@ class ScnData:
                             kill_unit, 160, 5, 234, 79)
                     self._add_activate(rts.names.begin, kill_hero_name)
                     self._add_deactivate(rts.names.cleanup, kill_hero_name)
+                self._create_unit_sequence(
+                    p, unit, rts, True, self._regicide_buff)
 
             # Creates triggers for changing points.
             for k in range(1, 101):
@@ -3057,7 +3076,8 @@ class ScnData:
                 self._add_effect_score(pts, other_player(p), 1)
                 self._add_activate(rts.names.begin, name)
                 self._add_deactivate(rts.names.cleanup, name)
-                self._add_deactivate(stalemate_name, name)
+                if self._regicide_hero == units.king:
+                    self._add_deactivate(stalemate_name, name)
                 self._add_deactivate(
                     rts.names.p1_wins if p is Player.ONE else rts.names.p2_wins,
                     name)
