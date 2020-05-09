@@ -126,8 +126,8 @@ INITIAL_VARIABLES = [
     ('p2-castle-constructed', 0),
     ('p1-castle-destroyed', 0),
     ('p2-castle-destroyed', 0),
-    ('p1-king-killed', 0),
-    ('p2-king-killed', 0)
+    ('p1-hero-killed', 0),
+    ('p2-hero-killed', 0)
 ]
 
 
@@ -334,8 +334,21 @@ FLAG_A_UCONST = 600
 DC_STONE = 1300
 
 
-# Unit constant of a Castle.
-CASTLE_UCONST = 82
+# Unit constand for the Genghis Khan hero.
+UCONST_GENGHIS_KHAN = 731
+
+
+# Unit constand for the Joan of Arc hero.
+UCONST_JOAN_OF_ARC = 629
+
+
+# TODO parse these two from the command line
+# Default hero to use for the Regicide minigame.
+REGICIDE_DEFAULT_HERO = units.king
+
+
+# Default value for whether to buff the stats of the Regicide hero.
+REGICIDE_DEFAULT_BUFF = False
 
 
 # Center positions of minigames to be used when changing the view.
@@ -349,6 +362,14 @@ MINIGAME_CENTERS = {
     'Castle Siege': (120, 39),
     'Regicide': (200, 40),
 }
+
+
+def other_player(p: Player):
+    """
+    Returns Player.TWO if p is Player.ONE.
+    Returns Player.ONE if p is Player.TWO.
+    """
+    return p is Player.ONE and Player.TWO or Player.ONE
 
 
 def map_revealer_pos(pos: Tuple[int, int]) -> List[Tuple[int, int]]:
@@ -612,7 +633,8 @@ class ScnData:
 
     # TODO annotate the type of the events list
     def __init__(self, scn: AoE2Scenario, events, xbow_scn: AoE2Scenario,
-                 arena: AoE2Scenario):
+                 arena: AoE2Scenario, regicide_hero=REGICIDE_DEFAULT_HERO,
+                 regicide_buff=REGICIDE_DEFAULT_BUFF):
         """Initializes a new ScnData object for the scenario scn."""
         self._scn = scn
         self._events = events
@@ -647,6 +669,12 @@ class ScnData:
 
         # Scenario for the arena template units.
         self._arena = arena
+
+        # Hero unit to use for the Regicide minigame.
+        self._regicide_hero = regicide_hero
+
+        # True to buff the hero for the Regicide minigame, False otherwise.
+        self._regicide_buff = regicide_buff
 
     @property
     def num_rounds(self):
@@ -1589,34 +1617,34 @@ class ScnData:
         obj_king.mute_objectives = True
         util_triggers.add_cond_gaia_defeated(obj_king)
 
-        obj_king1_killed_name = f"[O] Regicide Kill Player 1's King"
+        obj_king1_killed_name = f"[O] Regicide Kill Player 1's Hero"
         self._round_objectives[index].append(obj_king1_killed_name)
         obj_king1_killed = self._add_trigger(obj_king1_killed_name)
         obj_king1_killed.enabled = False
-        obj_king1_killed.description = '- Player 1 King Killed'
-        obj_king1_killed.short_description = '- P1 King Killed'
+        obj_king1_killed.description = '- Player 1 Hero Killed'
+        obj_king1_killed.short_description = '- P1 Hero Killed'
         obj_king1_killed.display_as_objective = True
         obj_king1_killed.display_on_screen = True
         obj_king1_killed.description_order = 49
         obj_king1_killed.mute_objectives = True
         k1_destroyed = obj_king1_killed.add_condition(conditions.variable_value)
         k1_destroyed.amount_or_quantity = 1
-        k1_destroyed.variable = self._var_ids['p1-king-killed']
+        k1_destroyed.variable = self._var_ids['p1-hero-killed']
         k1_destroyed.comparison = VarValComp.equal.value
 
-        obj_king2_killed_name = f"[O] Regicide Kill Player 2's King"
+        obj_king2_killed_name = f"[O] Regicide Kill Player 2's Hero"
         self._round_objectives[index].append(obj_king2_killed_name)
         obj_king2_killed = self._add_trigger(obj_king2_killed_name)
         obj_king2_killed.enabled = False
-        obj_king2_killed.description = '- Player 2 King Killed'
-        obj_king2_killed.short_description = '- P2 King Killed'
+        obj_king2_killed.description = '- Player 2 Hero Killed'
+        obj_king2_killed.short_description = '- P2 Hero Killed'
         obj_king2_killed.display_as_objective = True
         obj_king2_killed.display_on_screen = True
         obj_king2_killed.description_order = 48
         obj_king2_killed.mute_objectives = True
         k2_destroyed = obj_king2_killed.add_condition(conditions.variable_value)
         k2_destroyed.amount_or_quantity = 1
-        k2_destroyed.variable = self._var_ids['p2-king-killed']
+        k2_destroyed.variable = self._var_ids['p2-hero-killed']
         k2_destroyed.comparison = VarValComp.equal.value
 
     def _add_victory_conditions(self):
@@ -2157,10 +2185,10 @@ class ScnData:
                     no_build.amount_or_quantity = 1
                     no_build.object_list = building_const
                     util_triggers.set_cond_area(no_build, 160, 160, 239, 239)
-                other_player = Player.TWO if p == Player.ONE else Player.ONE
+                other_p = Player.TWO if p == Player.ONE else Player.ONE
                 other_points = defeated.add_condition(conditions.variable_value)
                 other_points.amount_or_quantity = enemy_points
-                other_var_name = f'p{other_player.value}-battlefield-points'
+                other_var_name = f'p{other_p.value}-battlefield-points'
                 other_points.variable = self._var_ids[other_var_name]
                 other_points.comparison = VarValComp.equal.value
                 remaining_points = event.MAX_POINTS - enemy_points
@@ -2169,7 +2197,7 @@ class ScnData:
                 add_points.operation = ChangeVarOp.add.value
                 add_points.from_variable = self._var_ids[other_var_name]
                 add_points.message = other_var_name
-                self._add_effect_score(defeated, other_player, remaining_points)
+                self._add_effect_score(defeated, other_p, remaining_points)
 
         self._add_activate(rts.names.begin, rts.names.p1_wins)
         var_p1 = rts.p1_wins.add_condition(conditions.variable_value)
@@ -2714,8 +2742,8 @@ class ScnData:
         # Defeats a player if they lose their Monasteries.
         for p in (Player.ONE, Player.TWO):
             name = f'{prefix} P{p.value} Loses Monasteries'
-            other_player = Player.TWO if p == Player.ONE else Player.ONE
-            other_name = f'{prefix} P{other_player.value} Loses Monasteries'
+            other_p = Player.TWO if p == Player.ONE else Player.ONE
+            other_name = f'{prefix} P{other_p.value} Loses Monasteries'
             lose = self._add_trigger(name)
             lose.enabled = False
             no_monasteries = lose.add_condition(conditions.object_in_area)
@@ -2796,7 +2824,7 @@ class ScnData:
         p1_c_cond = p1_builds_castle.add_condition(conditions.object_in_area)
         p1_c_cond.amount_or_quantity = 1
         p1_c_cond.player = 1
-        p1_c_cond.object_list = CASTLE_UCONST
+        p1_c_cond.object_list = buildings.castle
         util_triggers.set_cond_area(p1_c_cond, x1, y1, x2, y2)
         self._add_activate(p1_builds_castle_name, p1_wins_name)
         self._add_deactivate(p1_builds_castle_name, p1_loses_army_name)
@@ -2828,7 +2856,7 @@ class ScnData:
         p2_c_cond = p2_builds_castle.add_condition(conditions.object_in_area)
         p2_c_cond.amount_or_quantity = 1
         p2_c_cond.player = 2
-        p2_c_cond.object_list = CASTLE_UCONST
+        p2_c_cond.object_list = buildings.castle
         util_triggers.set_cond_area(p2_c_cond, x1, y1, x2, y2)
         self._add_activate(p2_builds_castle_name, p2_wins_name)
         self._add_deactivate(p2_builds_castle_name, p2_loses_army_name)
@@ -2893,7 +2921,7 @@ class ScnData:
         p2_loses_castle = self._add_trigger(p2_loses_castle_name)
         p2_loses_castle.enabled = False
         p2_no_castle = p2_loses_castle.add_condition(conditions.object_in_area)
-        p2_no_castle.inverted = 1
+        p2_no_castle.inverted = True
         p2_no_castle.player = Player.TWO.value
         p2_no_castle.amount_or_quantity = 1
         p2_no_castle.object_list = buildings.castle
@@ -2927,7 +2955,7 @@ class ScnData:
         p1_loses_castle = self._add_trigger(p1_loses_castle_name)
         p1_loses_castle.enabled = False
         p1_no_castle = p1_loses_castle.add_condition(conditions.object_in_area)
-        p1_no_castle.inverted = 1
+        p1_no_castle.inverted = True
         p1_no_castle.player = Player.ONE.value
         p1_no_castle.amount_or_quantity = 1
         p1_no_castle.object_list = buildings.castle
@@ -2978,95 +3006,92 @@ class ScnData:
         rts = _RoundTriggers(self, index)
         umgr = self._scn.object_manager.unit_manager
         prefix = f'[R{index}]' if index else '[T]'
-        # TODO allow for heroes other than Kings, e.g. Khan and Joan
-        # TODO get rid of stalemate
-
-        player_units = {Player.ONE: [], Player.TWO: []}
-        kill_king_triggers = dict()
+        stalemate_name = f'{prefix} Regicide Stalemate'
+        # TODO allow for buffing the heroes (prob change the create unit
+        # sequence to have a general "buff" parameter).
 
         for p in (Player.ONE, Player.TWO):
             # Leaves a small buffer to avoid selecting the units at the
             # very top of the map.
             ulst = umgr.get_units_in_area(160.0, 5.0, 235.0, 80.0, players=[p])
+            uconsts = {u.unit_id for u in ulst}
             for unit in ulst:
-                uid = unit.reference_id
-                uconst = unit.unit_id
-                if uconst == units.king:
-                    kill_king_name = f"{prefix} Player {p.value}'s King Killed"
-                    self._add_activate(rts.names.begin, kill_king_name)
-                    self._add_deactivate(rts.names.cleanup, kill_king_name)
-                    kill_king = self._add_trigger(kill_king_name)
-                    kill_king_triggers[p] = kill_king
-                    kill_king.enabled = False
-                    util_triggers.add_cond_hp0(kill_king, uid)
-                    record_kill = kill_king.add_effect(effects.change_variable)
+                self._create_unit_sequence(p, unit, rts)
+                if unit.unit_id == self._regicide_hero:
+                    kill_hero_name = f"{prefix} Player {p.value}'s Hero Killed"
+                    kill_hero = self._add_trigger(kill_hero_name)
+                    kill_hero.enabled = False
+                    obj_area = kill_hero.add_condition(
+                        conditions.object_in_area)
+                    obj_area.inverted = True
+                    obj_area.player = p.value
+                    obj_area.amount_or_quantity = 1
+                    obj_area.object_list = self._regicide_hero
+                    util_triggers.set_cond_area(obj_area, 160, 5, 234, 79)
+                    record_kill = kill_hero.add_effect(effects.change_variable)
                     record_kill.quantity = 1
                     record_kill.operation = ChangeVarOp.add.value
                     record_kill.from_variable = self._var_ids[
-                        f'p{p.value}-king-killed'
+                        f'p{p.value}-hero-killed'
                     ]
-                else:
-                    player_units[p].append(unit)
-                    uname = unit.name
-                    pts_name = (
-                        f"{prefix} Regicide Kill P{p.value}'s {uname} ({uid})"
-                    )
-                    self._add_activate(rts.names.begin, pts_name)
-                    self._add_deactivate(rts.names.cleanup, pts_name)
-                    award_pts = self._add_trigger(pts_name)
-                    util_triggers.add_cond_hp0(award_pts, uid)
-                    # TODO debug when not all kills are counted when a king dies
-                    # Perhaps base points based on population?
-                    # Does this affect other fights as well?
-                    self._add_effect_score(
-                        award_pts,
-                        Player.TWO if p == Player.ONE else Player.ONE,
-                        1)
-                # Change the unit constant after using the unit's name.
-                unit.unit_id = UCONST_INVISIBLE_OBJECT
+                    for uconst in uconsts:
+                        kill_unit = kill_hero.add_effect(effects.kill_object)
+                        kill_unit.player_source = p.value
+                        kill_unit.object_list_unit_id = uconst
+                        util_triggers.set_effect_area(
+                            kill_unit, 160, 5, 234, 79)
+                    self._add_activate(rts.names.begin, kill_hero_name)
+                    self._add_deactivate(rts.names.cleanup, kill_hero_name)
 
-                replace = rts.init.add_effect(effects.replace_object)
-                replace.number_of_units_selected = 1
-                replace.object_list_unit_id = UCONST_INVISIBLE_OBJECT
-                replace.player_source = p.value
-                replace.player_target = p.value
-                replace.object_list_unit_id_2 = uconst
-                replace.selected_object_id = uid
-                util_triggers.add_effect_change_own_unit(
-                    rts.init, p.value, Player.GAIA.value, uid)
-                util_triggers.add_effect_change_own_unit(
-                    rts.begin, Player.GAIA.value, p.value, uid)
+            # Creates triggers for changing points.
+            for k in range(1, 101):
+                name = f'{prefix} Regicide P{p.value} Pop Under {k}'
+                pts = self._add_trigger(name)
+                pts.enabled = False
+                pop_under_k = pts.add_condition(conditions.accumulate_attribute)
+                pop_under_k.inverted = True
+                pop_under_k.amount_or_quantity = k + 1
+                pop_under_k.player = p.value
+                pop_under_k.resource_type_or_tribute_list = (
+                    util_triggers.ACC_ATTR_POP_HEADROOM)
+                self._add_effect_score(pts, other_player(p), 1)
+                self._add_activate(rts.names.begin, name)
+                self._add_deactivate(rts.names.cleanup, name)
+                self._add_deactivate(stalemate_name, name)
+                self._add_deactivate(
+                    rts.names.p1_wins if p is Player.ONE else rts.names.p2_wins,
+                    name)
 
-        # Kills all of a player's unis when their King is killed.
-        # TODO kill all non map revealer units in the area
-        for p, ulst in player_units.items():
-            for unit in ulst:
-                king_death = kill_king_triggers[p]
-                kill_unit = king_death.add_effect(effects.kill_object)
-                kill_unit.number_of_units_selected = 1
-                kill_unit.selected_object_id = unit.reference_id
-                kill_unit.player_source = p.value
+            # Cleanup removes units from player control.
+            for uconst in uconsts:
+                remove = rts.cleanup.add_effect(effects.remove_object)
+                remove.object_list_unit_id = uconst
+                remove.player_source = p.value
+                util_triggers.set_effect_area(remove, 160, 0, 239, 79)
 
-        # TODO rework stalemante
-        # stalemate_name = f'{prefix} Regicide Stalemate'
-        # stalemate = self._add_trigger(stalemate_name)
-        # stalemate.enabled = False
-        # self._add_activate(rts.names.begin, stalemate_name)
-        # self._add_activate(stalemate_name, rts.names.cleanup)
-        # self._add_deactivate(stalemate_name, rts.names.p1_wins)
-        # self._add_deactivate(stalemate_name, rts.names.p2_wins)
-        # for p in (Player.ONE, Player.TWO):
-        #     pop1 = stalemate.add_condition(conditions.accumulate_attribute)
-        #     pop1.player = p.value
-        #     pop1.amount_or_quantity = 1
-        #     pop1.resource_type_or_tribute_list = (
-        #         util_triggers.ACC_ATTR_POP_HEADROOM)
-        #     popnot2 = stalemate.add_condition(conditions.accumulate_attribute)
-        #     popnot2.player = p.value
-        #     popnot2.amount_or_quantity = 2
-        #     popnot2.resource_type_or_tribute_list = (
-        #         util_triggers.ACC_ATTR_POP_HEADROOM)
-        #     popnot2.inverted = True
+        # Stalemate possible only if the hero unit is a King.
+        if self._regicide_hero == units.king:
+            stalemate = self._add_trigger(stalemate_name)
+            stalemate.enabled = False
+            self._add_activate(rts.names.begin, stalemate_name)
+            self._add_activate(stalemate_name, rts.names.cleanup)
+            self._add_deactivate(stalemate_name, rts.names.p1_wins)
+            self._add_deactivate(stalemate_name, rts.names.p2_wins)
+            self._add_deactivate(rts.names.p1_wins, stalemate_name)
+            self._add_deactivate(rts.names.p2_wins, stalemate_name)
+            for p in (Player.ONE, Player.TWO):
+                pop1 = stalemate.add_condition(conditions.accumulate_attribute)
+                pop1.player = p.value
+                pop1.amount_or_quantity = 1
+                pop1.resource_type_or_tribute_list = (
+                    util_triggers.ACC_ATTR_POP_HEADROOM)
+                popnot2 = stalemate.add_condition(
+                    conditions.accumulate_attribute)
+                popnot2.player = p.value
+                popnot2.amount_or_quantity = 2
+                popnot2.resource_type_or_tribute_list = (
+                    util_triggers.ACC_ATTR_POP_HEADROOM)
+                popnot2.inverted = True
 
         self._add_activate(rts.names.begin, rts.names.p1_wins)
         self._add_deactivate(rts.names.p1_wins, rts.names.p2_wins)
@@ -3076,12 +3101,6 @@ class ScnData:
         self._add_deactivate(rts.names.p2_wins, rts.names.p1_wins)
         util_triggers.add_cond_pop0(rts.p2_wins, 1)
 
-        # Cleanup removes units from player control.
-        for p in (Player.ONE, Player.TWO):
-            cleanup_change = rts.cleanup.add_effect(effects.change_ownership)
-            cleanup_change.player_source = p.value
-            cleanup_change.player_target = Player.GAIA.value
-            util_triggers.set_effect_area(cleanup_change, 160, 0, 239, 79)
 
     def _add_fight(self, index: int, f: Fight) -> None:
         """Adds the fight with the given index."""
