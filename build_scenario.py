@@ -865,9 +865,47 @@ class ScnData:
                 change.object_list_unit_id = units.king
                 util_triggers.set_effect_area(change, 160, 5, 235, 79)
             elif unit.unit_id == UCONST_GENGHIS_KHAN:
-                pass # TODO test buff
+                change_hp = init.add_effect(effects.change_object_hp)
+                change_hp.quantity = 100
+                change_hp.player_source = p.value
+                change_hp.operation = ChangeVarOp.add.value
+                change_hp.object_list_unit_id = UCONST_GENGHIS_KHAN
+                util_triggers.set_effect_area(change_hp, 160, 5, 235, 79)
+                change_attack = init.add_effect(effects.change_object_attack)
+                change_attack.aa_quantity = 2
+                change_attack.aa_armor_or_attack_type = CLASS_PIERCE
+                change_attack.player_source = p.value
+                change_attack.operation = ChangeVarOp.add.value
+                change_attack.object_list_unit_id = UCONST_GENGHIS_KHAN
+                util_triggers.set_effect_area(change_attack, 160, 5, 235, 79)
+                change_range = init.add_effect(effects.change_object_range)
+                change_range.quantity = 2
+                change_range.player_source = p.value
+                change_range.operation = ChangeVarOp.add.value
+                change_range.object_list_unit_id = UCONST_GENGHIS_KHAN
+                util_triggers.set_effect_area(change_range, 160, 5, 235, 79)
             elif unit.unit_id == UCONST_JOAN_OF_ARC:
-                pass # TODO test buff
+                change_hp = init.add_effect(effects.change_object_hp)
+                change_hp.quantity = 100
+                change_hp.player_source = p.value
+                change_hp.operation = ChangeVarOp.add.value
+                change_hp.object_list_unit_id = UCONST_JOAN_OF_ARC
+                util_triggers.set_effect_area(change_hp, 160, 5, 235, 79)
+                change_attack = init.add_effect(effects.change_object_attack)
+                change_attack.aa_quantity = 2
+                change_attack.aa_armor_or_attack_type = CLASS_MELEE
+                change_attack.player_source = p.value
+                change_attack.operation = ChangeVarOp.add.value
+                change_attack.object_list_unit_id = UCONST_JOAN_OF_ARC
+                util_triggers.set_effect_area(change_attack, 160, 5, 235, 79)
+                for armor_class in (CLASS_MELEE, CLASS_PIERCE):
+                    change_armor = init.add_effect(effects.change_object_armor)
+                    change_armor.aa_quantity = 1
+                    change_armor.aa_armor_or_attack_type = armor_class
+                    change_armor.player_source = p.value
+                    change_armor.operation = ChangeVarOp.add.value
+                    change_armor.object_list_unit_id = UCONST_JOAN_OF_ARC
+                    util_triggers.set_effect_area(change_armor, 160, 5, 235, 79)
 
         to0 = init.add_effect(effects.change_ownership)
         to0.player_source = p.value
@@ -3063,7 +3101,7 @@ class ScnData:
                     p, unit, rts, True, self._regicide_buff)
 
             # Creates triggers for changing points.
-            for k in range(1, 101):
+            for k in range(100):
                 name = f'{prefix} Regicide P{p.value} Pop Under {k}'
                 pts = self._add_trigger(name)
                 pts.enabled = False
@@ -3187,7 +3225,9 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
                    event_json: str = event.DEFAULT_FILE,
                    xbow_template: str = XBOW_TEMPLATE,
                    arena_template: str = ARENA_TEMPLATE,
-                   output: str = OUTPUT):
+                   output: str = OUTPUT,
+                   hero: int = REGICIDE_DEFAULT_HERO,
+                   buff: bool = REGICIDE_DEFAULT_BUFF):
     """
     Builds the scenario.
 
@@ -3212,7 +3252,7 @@ def build_scenario(scenario_template: str = SCENARIO_TEMPLATE,
                         and e.name == 'Capture the Relic'
                         for e in events)
                  else None)
-    scn_data = ScnData(scn, events, xbow_scn, arena_scn)
+    scn_data = ScnData(scn, events, xbow_scn, arena_scn, hero, buff)
     scn_data.setup_scenario()
     scn_data.write_to_file(output)
 
@@ -3225,6 +3265,8 @@ def call_build_scenario(args):
     xbow_scn = args.xbow[0]
     arena_scn = args.arena[0]
     out = args.output[0]
+    hero = args.hero[0]
+    buff = args.buff
 
     # Checks the output path is different from all input paths.
     matches = []
@@ -3242,9 +3284,15 @@ def call_build_scenario(args):
         conflicts = ', '.join(matches)
         msg = f"The output path '{out}' conflicts with: {conflicts}."
         raise ValueError(msg)
+    if hero not in (units.king, UCONST_JOAN_OF_ARC, UCONST_GENGHIS_KHAN):
+        msg = (f'hero is {hero} but must be one of:\n'
+               + f'  {units.king} - King\n'
+               + f'  {UCONST_JOAN_OF_ARC} - Joan\n'
+               + f'  {UCONST_GENGHIS_KHAN} - Khan')
+        raise ValueError(msg)
 
     build_scenario(scenario_template=scenario_map, unit_template=units_scn,
-                   event_json=event_json, output=out)
+                   event_json=event_json, output=out, hero=hero, buff=buff)
 
 
 def build_publish_files(args):
@@ -3313,8 +3361,19 @@ def main():
                               help='Filepath to the xbow timer units file.')
     parser_build.add_argument('--arena', nargs=1, default=[ARENA_TEMPLATE],
                               help='Filepath to the arena units file.')
-    parser_build.add_argument('--output', '-o', nargs=1, default=[OUTPUT],
-                              help='Filepath to which the output is written, must differ from all input files.') #pylint: disable=line-too-long
+    parser_build.add_argument('--hero', nargs=1, type=int,
+                              default=[REGICIDE_DEFAULT_HERO],
+                              help=('The hero to use for the Regicide minigame:'
+                                    + f'  {units.king} - King,'
+                                    + f'  {UCONST_JOAN_OF_ARC} - Joan,'
+                                    + f'  {UCONST_GENGHIS_KHAN} - Khan.'))
+
+    parser_build.add_argument('--buff', action='store_true',
+                              help='Pass this flag to buff the Regicide hero.')
+    parser_build.add_argument(
+        '--output', '-o', nargs=1, default=[OUTPUT],
+        help='Filepath to which the output is written, must differ from all input files.' #pylint: disable=line-too-long
+    )
     parser_build.set_defaults(func=call_build_scenario)
 
     parser_publish = subparsers.add_parser('publish',

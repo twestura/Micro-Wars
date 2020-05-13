@@ -1,0 +1,44 @@
+[
+    {
+        "techs": ["mahouts"],
+        "points": {
+            "elite_war_elephant": 0
+        }
+    },
+    {
+        "techs": ["loom", "feudal_age", "fletching"],
+        "points": {
+            "scout_cavalry": 0,
+            "archer": 0,
+            "skirmisher": 0,
+            "spearman": 0
+        }
+    },
+    {
+        "techs": [],
+        "points": {
+            "scout_cavalry": 0,
+            "archer": 0,
+            "skirmisher": 0,
+            "spearman": 0
+        }
+    },
+    {
+        "techs": [],
+        "points": {
+            "scout_cavalry": 0,
+            "archer": 0,
+            "skirmisher": 0,
+            "spearman": 0
+        }
+    },
+    {
+        "techs": [],
+        "points": {
+            "scout_cavalry": 0,
+            "archer": 0,
+            "skirmisher": 0,
+            "spearman": 0
+        }
+    }
+]
