@@ -2079,7 +2079,8 @@ class ScnData:
         for p in (Player.ONE, Player.TWO):
             for unit in umgr.get_units_in_area(160.0, 160.0, 240.0, 240.0,
                                                players=[p]):
-                self._create_unit_sequence(p, unit, rts)
+                if unit.unit_id != UCONST_INVISIBLE_OBJECT:
+                    self._create_unit_sequence(p, unit, rts)
 
         # Looping triggers for adding points while a player holds a flag.
         add_points_names = []
@@ -2240,7 +2241,7 @@ class ScnData:
                     no_build.player = p.value
                     no_build.amount_or_quantity = 1
                     no_build.object_list = building_const
-                    util_triggers.set_cond_area(no_build, 160, 160, 239, 239)
+                    util_triggers.set_cond_area(no_build, 160, 160, 238, 238)
                 other_p = Player.TWO if p == Player.ONE else Player.ONE
                 other_points = defeated.add_condition(conditions.variable_value)
                 other_points.amount_or_quantity = enemy_points
@@ -2856,6 +2857,8 @@ class ScnData:
         for p in (Player.ONE, Player.TWO):
             for unit in umgr.get_units_in_area(0.0, 0.0, 80.0, 80.0,
                                                players=[p]):
+                if unit.unit_id == UCONST_INVISIBLE_OBJECT:
+                    continue
                 if unit.unit_id == FLAG_A_UCONST:
                     player_flags[p].add(unit)
                 self._create_unit_sequence(p, unit, rts)
